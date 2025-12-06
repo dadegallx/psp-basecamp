@@ -18,7 +18,9 @@ type ChartMetadata = {
 export const chartArtifact = new Artifact<"chart", ChartMetadata>({
   kind: "chart",
   description: "Create data visualizations and charts",
-  initialize: () => ({ showSQL: false }),
+  initialize: ({ setMetadata }) => {
+    setMetadata({ showSQL: false });
+  },
   onStreamPart: ({ streamPart, setArtifact }) => {
     if (streamPart.type === "data-chartDelta") {
       setArtifact((a) => ({

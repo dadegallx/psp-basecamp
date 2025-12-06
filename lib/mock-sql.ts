@@ -1,4 +1,4 @@
-import type { Result } from "@/lib/chart-types";
+import type { Config, Result } from "@/lib/chart-types";
 
 /**
  * Mock SQL schema for chart artifact demonstrations.
@@ -122,4 +122,59 @@ export function executeMockSQL(sql: string): Result[] {
     category,
     total_value,
   }));
+}
+
+/**
+ * Returns a mock chart config that matches the data returned by executeMockSQL.
+ * Use this for testing to ensure data and config are aligned.
+ */
+export function getMockConfig(sql: string, query: string): Config {
+  const normalized = sql.toLowerCase();
+
+  // Pattern: GROUP BY month → line chart
+  if (normalized.includes("group by") && normalized.includes("month")) {
+    return {
+      type: "line",
+      title: query,
+      description: "Monthly sales trend over time",
+      takeaway: "Sales show variation across months",
+      xKey: "month",
+      yKeys: ["total_value"],
+      labels: { total_value: "Total Sales" },
+      legend: false,
+    };
+  }
+
+  // Pattern: raw data with category + month → multi-line chart
+  if (
+    normalized.includes("category") &&
+    normalized.includes("month") &&
+    !normalized.includes("group by")
+  ) {
+    return {
+      type: "line",
+      title: query,
+      description: "Sales by category over time",
+      takeaway: "Different categories show different trends",
+      xKey: "month",
+      yKeys: ["value"],
+      labels: { value: "Sales Value" },
+      multipleLines: true,
+      measurementColumn: "value",
+      lineCategories: ["Electronics", "Clothing", "Food", "Home"],
+      legend: true,
+    };
+  }
+
+  // Default: GROUP BY category → bar chart
+  return {
+    type: "bar",
+    title: query,
+    description: "Total sales by product category",
+    takeaway: "Electronics leads in total sales value",
+    xKey: "category",
+    yKeys: ["total_value"],
+    labels: { total_value: "Total Sales" },
+    legend: false,
+  };
 }

@@ -4,7 +4,10 @@ import { chartConfigPrompt, chartSQLPrompt } from "@/lib/ai/prompts";
 import { myProvider } from "@/lib/ai/providers";
 import { createDocumentHandler } from "@/lib/artifacts/server";
 import { configSchema, type Config, type Result } from "@/lib/chart-types";
-import { executeMockSQL, validateSQL } from "@/lib/mock-sql";
+import { executeMockSQL, getMockConfig, validateSQL } from "@/lib/mock-sql";
+
+// Set to true to use AI-generated config, false to use mock config for testing
+const USE_AI_CONFIG = false;
 
 export type ChartContent = {
   query: string;
@@ -38,12 +41,18 @@ export const chartDocumentHandler = createDocumentHandler<"chart">({
     const results = executeMockSQL(sql);
 
     // Generate chart config
-    const { object: config } = await generateObject({
-      model: myProvider.languageModel("artifact-model"),
-      system: chartConfigPrompt,
-      prompt: `Generate a chart configuration for the user query: "${query}"\n\nData:\n${JSON.stringify(results, null, 2)}`,
-      schema: configSchema,
-    });
+    let config: Config;
+    if (USE_AI_CONFIG) {
+      const { object: aiConfig } = await generateObject({
+        model: myProvider.languageModel("artifact-model"),
+        system: chartConfigPrompt,
+        prompt: `Generate a chart configuration for the user query: "${query}"\n\nData:\n${JSON.stringify(results, null, 2)}`,
+        schema: configSchema,
+      });
+      config = aiConfig;
+    } else {
+      config = getMockConfig(sql, query);
+    }
 
     // Add colors to config
     const colors: Record<string, string> = {};
