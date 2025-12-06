@@ -1,13 +1,42 @@
 import { generateObject } from "ai";
 import { z } from "zod";
-import { chartConfigPrompt, chartSQLPrompt } from "@/lib/ai/prompts";
+import { chartConfigPrompt } from "@/lib/ai/prompts/chart-config";
+import { chartSqlPrompt } from "@/lib/ai/prompts/chart-sql";
 import { myProvider } from "@/lib/ai/providers";
 import { createDocumentHandler } from "@/lib/artifacts/server";
 import { configSchema, type Config, type Result } from "@/lib/chart-types";
-import { executeMockSQL, getMockConfig, validateSQL } from "@/lib/mock-sql";
+import { sql } from "@/lib/neon";
 
-// Set to true to use AI-generated config, false to use mock config for testing
-const USE_AI_CONFIG = false;
+/**
+ * Validates that a SQL query is safe to execute (SELECT only, no destructive operations)
+ */
+function validateSQL(query: string): { valid: boolean; error?: string } {
+  const normalized = query.trim().toLowerCase();
+
+  if (!normalized.startsWith("select")) {
+    return { valid: false, error: "Only SELECT queries are allowed" };
+  }
+
+  const forbidden = [
+    "drop",
+    "delete",
+    "insert",
+    "update",
+    "alter",
+    "truncate",
+    "create",
+    "grant",
+    "revoke",
+  ];
+
+  for (const keyword of forbidden) {
+    if (normalized.includes(keyword)) {
+      return { valid: false, error: `Forbidden keyword: ${keyword}` };
+    }
+  }
+
+  return { valid: true };
+}
 
 export type ChartContent = {
   query: string;
@@ -19,40 +48,37 @@ export type ChartContent = {
 export const chartDocumentHandler = createDocumentHandler<"chart">({
   kind: "chart",
   onCreateDocument: async ({ title: query, dataStream }) => {
-    // Generate SQL
+    // Generate SQL using the real Poverty Stoplight schema
     const { object: sqlResult } = await generateObject({
       model: myProvider.languageModel("artifact-model"),
-      system: chartSQLPrompt,
+      system: chartSqlPrompt,
       prompt: `Generate a SQL query for: ${query}`,
       schema: z.object({
         sql: z.string().describe("The SQL SELECT query"),
       }),
     });
 
-    const sql = sqlResult.sql;
+    const generatedSql = sqlResult.sql;
 
     // Validate SQL
-    const validation = validateSQL(sql);
+    const validation = validateSQL(generatedSql);
     if (!validation.valid) {
       throw new Error(validation.error);
     }
 
-    // Execute SQL (mock)
-    const results = executeMockSQL(sql);
+    // Execute SQL against Neon database
+    // Use array syntax to call the tagged template function with a dynamic string
+    const results = (await sql(
+      [generatedSql] as unknown as TemplateStringsArray
+    )) as Result[];
 
-    // Generate chart config
-    let config: Config;
-    if (USE_AI_CONFIG) {
-      const { object: aiConfig } = await generateObject({
-        model: myProvider.languageModel("artifact-model"),
-        system: chartConfigPrompt,
-        prompt: `Generate a chart configuration for the user query: "${query}"\n\nData:\n${JSON.stringify(results, null, 2)}`,
-        schema: configSchema,
-      });
-      config = aiConfig;
-    } else {
-      config = getMockConfig(sql, query);
-    }
+    // Generate chart config using AI
+    const { object: config } = await generateObject({
+      model: myProvider.languageModel("artifact-model"),
+      system: chartConfigPrompt,
+      prompt: `Generate a chart configuration for the user query: "${query}"\n\nData:\n${JSON.stringify(results, null, 2)}`,
+      schema: configSchema,
+    });
 
     // Add colors to config
     const colors: Record<string, string> = {};
@@ -64,7 +90,7 @@ export const chartDocumentHandler = createDocumentHandler<"chart">({
     // Build final content
     const chartContent: ChartContent = {
       query,
-      sql,
+      sql: generatedSql,
       results,
       config: finalConfig,
     };
