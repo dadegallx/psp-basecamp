@@ -56,9 +56,12 @@ export const chartArtifact = new Artifact<"chart", ChartMetadata>({
       const { sql, results, config } = chartContent;
 
       return (
-        <div className="flex h-full w-full flex-col gap-4 p-4">
+        <div className="flex h-full w-full flex-col items-center justify-center gap-4 p-4">
+          <div className="w-full max-w-3xl">
+            <DynamicChart chartData={results} chartConfig={config} />
+          </div>
           {metadata?.showSQL && (
-            <div className="rounded-md border bg-muted/50 p-4">
+            <div className="w-full max-w-3xl rounded-md border bg-muted/50 p-4">
               <div className="mb-2 text-xs font-medium text-muted-foreground">
                 Generated SQL
               </div>
@@ -67,9 +70,6 @@ export const chartArtifact = new Artifact<"chart", ChartMetadata>({
               </pre>
             </div>
           )}
-          <div className="flex-1">
-            <DynamicChart chartData={results} chartConfig={config} />
-          </div>
         </div>
       );
     } catch {

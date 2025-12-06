@@ -20,6 +20,7 @@ import { InlineDocumentSkeleton } from "./document-skeleton";
 import { FileIcon, FullscreenIcon, ImageIcon, LoaderIcon } from "./icons";
 import { ImageEditor } from "./image-editor";
 import { SpreadsheetEditor } from "./sheet-editor";
+import { DynamicChart } from "./dynamic-chart";
 import { Editor } from "./text-editor";
 
 type DocumentPreviewProps = {
@@ -242,6 +243,26 @@ const DocumentHeader = memo(PureDocumentHeader, (prevProps, nextProps) => {
   return true;
 });
 
+const ChartInlinePreview = ({ content }: { content: string }) => {
+  if (!content) {
+    return null;
+  }
+
+  try {
+    const chartContent = JSON.parse(content);
+    return (
+      <div className="p-4">
+        <DynamicChart
+          chartData={chartContent.results}
+          chartConfig={chartContent.config}
+        />
+      </div>
+    );
+  } catch {
+    return null;
+  }
+};
+
 const DocumentContent = ({ document }: { document: Document }) => {
   const { artifact } = useArtifact();
 
@@ -289,6 +310,8 @@ const DocumentContent = ({ document }: { document: Document }) => {
           status={artifact.status}
           title={document.title}
         />
+      ) : document.kind === "chart" ? (
+        <ChartInlinePreview content={document.content ?? ""} />
       ) : null}
     </div>
   );

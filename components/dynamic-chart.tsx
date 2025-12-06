@@ -208,7 +208,6 @@ export function DynamicChart({
 
   return (
     <div className="w-full flex flex-col justify-center items-center">
-      <h2 className="text-lg font-bold mb-2">{chartConfig.title}</h2>
       {chartConfig && chartData.length > 0 && (
         <ChartContainer
           config={chartConfig.yKeys.reduce(
@@ -226,10 +225,7 @@ export function DynamicChart({
           {renderChart()}
         </ChartContainer>
       )}
-      <div className="w-full">
-        <p className="mt-4 text-sm">{chartConfig.description}</p>
-        <p className="mt-4 text-sm">{chartConfig.takeaway}</p>
-      </div>
+      <p className="mt-4 text-sm text-center">{chartConfig.description}</p>
     </div>
   );
 }
