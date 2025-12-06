@@ -45,20 +45,44 @@ export type ChartContent = {
   config: Config;
 };
 
+// TODO: Remove this flag and hardcoded query after testing
+const USE_HARDCODED_SQL = true;
+const HARDCODED_SQL = `
+SELECT
+    i.indicator_name,
+    COUNT(*) FILTER (WHERE f.indicator_status_value = 1) AS red_count,
+    COUNT(*) FILTER (WHERE f.indicator_status_value = 2) AS yellow_count,
+    COUNT(*) FILTER (WHERE f.indicator_status_value = 3) AS green_count
+  FROM analytics_marts.fact_family_indicator_snapshot f
+  JOIN analytics_marts.dim_indicator_questions i
+    ON f.survey_indicator_id = i.survey_indicator_id
+  WHERE f.survey_definition_id = 93
+    AND f.is_last = TRUE
+    AND f.indicator_status_value IS NOT NULL
+  GROUP BY i.indicator_name
+  ORDER BY i.indicator_name;
+`.trim();
+
 export const chartDocumentHandler = createDocumentHandler<"chart">({
   kind: "chart",
   onCreateDocument: async ({ title: query, dataStream }) => {
-    // Generate SQL using the real Poverty Stoplight schema
-    const { object: sqlResult } = await generateObject({
-      model: myProvider.languageModel("artifact-model"),
-      system: chartSqlPrompt,
-      prompt: `Generate a SQL query for: ${query}`,
-      schema: z.object({
-        sql: z.string().describe("The SQL SELECT query"),
-      }),
-    });
+    let generatedSql: string;
 
-    const generatedSql = sqlResult.sql;
+    if (USE_HARDCODED_SQL) {
+      // Bypass LLM for testing
+      generatedSql = HARDCODED_SQL;
+    } else {
+      // Generate SQL using the real Poverty Stoplight schema
+      const { object: sqlResult } = await generateObject({
+        model: myProvider.languageModel("artifact-model"),
+        system: chartSqlPrompt,
+        prompt: `Generate a SQL query for: ${query}`,
+        schema: z.object({
+          sql: z.string().describe("The SQL SELECT query"),
+        }),
+      });
+      generatedSql = sqlResult.sql;
+    }
 
     // Validate SQL
     const validation = validateSQL(generatedSql);
@@ -67,10 +91,8 @@ export const chartDocumentHandler = createDocumentHandler<"chart">({
     }
 
     // Execute SQL against Neon database
-    // Use array syntax to call the tagged template function with a dynamic string
-    const results = (await sql(
-      [generatedSql] as unknown as TemplateStringsArray
-    )) as Result[];
+    // Use sql.query() for dynamic SQL strings (not template literals)
+    const results = (await sql.query(generatedSql)) as Result[];
 
     // Generate chart config using AI
     const { object: config } = await generateObject({
