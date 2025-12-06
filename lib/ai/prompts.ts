@@ -133,6 +133,7 @@ Choose the best chart type:
 Requirements:
 - xKey must match a column name in the data
 - yKeys must be numeric columns from the data
+- labels should map each yKey to a human-readable display name (e.g., "total_value" → "Total Sales")
 - title should be descriptive and concise
 - description should explain what the chart shows
 - takeaway should highlight the key insight from the data

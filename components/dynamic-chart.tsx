@@ -209,7 +209,7 @@ export function DynamicChart({
           config={chartConfig.yKeys.reduce(
             (acc, key, index) => {
               acc[key] = {
-                label: key,
+                label: chartConfig.labels?.[key] ?? toTitleCase(key),
                 color: colors[index % colors.length],
               };
               return acc;

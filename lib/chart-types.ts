@@ -18,6 +18,13 @@ export const configSchema = z
     multipleLines: z.boolean().describe("For line charts only: whether the chart is comparing groups of data.").optional(),
     measurementColumn: z.string().describe("For line charts only: key for quantitative y-axis column to measure against (eg. values, counts etc.)").optional(),
     lineCategories: z.array(z.string()).describe("For line charts only: Categories used to compare different lines or data series. Each category represents a distinct line in the chart.").optional(),
+    labels: z
+      .record(
+        z.string().describe("Any of the yKeys"),
+        z.string().describe("Human-readable label for display"),
+      )
+      .describe("Mapping of data keys to human-readable labels (e.g., total_value → 'Total Sales')")
+      .optional(),
     colors: z
       .record(
         z.string().describe("Any of the yKeys"),
