@@ -1,5 +1,6 @@
 import type { Geo } from "@vercel/functions";
 import type { ArtifactKind } from "@/components/artifact";
+import { MOCK_SCHEMA } from "@/lib/mock-sql";
 
 export const artifactsPrompt = `
 Artifacts is a special user interface mode that helps users with writing, editing, and other content creation tasks. When artifact is open, it is on the right side of the screen, while the conversation is on the left side. When creating or updating documents, changes are reflected in real-time on the artifacts and visible to the user.
@@ -30,6 +31,17 @@ This is a guide for using artifacts tools: \`createDocument\` and \`updateDocume
 - Immediately after creating a document
 
 Do not update document right after creating it. Wait for user feedback or request to update it.
+
+**Using \`createChart\`:**
+- For data visualization requests
+- When user asks to "show", "visualize", "chart", or "graph" data
+- When analyzing trends, comparisons, or distributions
+- For queries about sales, categories, or time-based data
+
+**When NOT to use \`createChart\`:**
+- For simple text responses or explanations
+- When user explicitly wants raw data or tables
+- For conversational responses without visualization
 `;
 
 export const regularPrompt =
@@ -94,6 +106,37 @@ print(f"Factorial of 5 is: {factorial(5)}")
 
 export const sheetPrompt = `
 You are a spreadsheet creation assistant. Create a spreadsheet in csv format based on the given prompt. The spreadsheet should contain meaningful column headers and data.
+`;
+
+export const chartSQLPrompt = `
+You are a SQL (postgres) expert. Generate a SQL query to retrieve data for visualization.
+
+${MOCK_SCHEMA}
+
+Rules:
+- Only SELECT queries are allowed
+- Return data suitable for charting (use aggregations like SUM, COUNT, AVG with GROUP BY)
+- Include meaningful column aliases
+- For comparisons, group by category
+- For trends over time, group by month
+`;
+
+export const chartConfigPrompt = `
+You are a data visualization expert. Generate a chart configuration for the given data.
+
+Choose the best chart type:
+- bar: For comparing categories (best for categorical data)
+- line: For trends over time (best when x-axis is temporal)
+- area: For cumulative data over time
+- pie: For showing proportions (use only for small datasets with 2-5 categories)
+
+Requirements:
+- xKey must match a column name in the data
+- yKeys must be numeric columns from the data
+- title should be descriptive and concise
+- description should explain what the chart shows
+- takeaway should highlight the key insight from the data
+- legend should be true if there are multiple yKeys
 `;
 
 export const updateDocumentPrompt = (

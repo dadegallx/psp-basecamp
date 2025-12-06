@@ -22,6 +22,7 @@ import { entitlementsByUserType } from "@/lib/ai/entitlements";
 import type { ChatModel } from "@/lib/ai/models";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { myProvider } from "@/lib/ai/providers";
+import { createChart } from "@/lib/ai/tools/create-chart";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { getWeather } from "@/lib/ai/tools/get-weather";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
@@ -192,6 +193,7 @@ export async function POST(request: Request) {
                   "createDocument",
                   "updateDocument",
                   "requestSuggestions",
+                  "createChart",
                 ],
           experimental_transform: smoothStream({ chunking: "word" }),
           tools: {
@@ -202,6 +204,7 @@ export async function POST(request: Request) {
               session,
               dataStream,
             }),
+            createChart: createChart({ session, dataStream }),
           },
           experimental_telemetry: {
             isEnabled: isProductionEnvironment,
