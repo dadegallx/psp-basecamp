@@ -1,5 +1,7 @@
 "use client";
 
+import { toPng } from "html-to-image";
+import { saveAs } from "file-saver";
 import { toast } from "sonner";
 import type { ChartContent } from "@/artifacts/chart/server";
 import { Artifact } from "@/components/create-artifact";
@@ -7,6 +9,7 @@ import { DynamicChart } from "@/components/dynamic-chart";
 import {
   CodeIcon,
   CopyIcon,
+  DownloadIcon,
   RedoIcon,
   UndoIcon,
 } from "@/components/icons";
@@ -57,7 +60,7 @@ export const chartArtifact = new Artifact<"chart", ChartMetadata>({
 
       return (
         <div className="flex h-full w-full flex-col items-center justify-center gap-4 p-4">
-          <div className="w-full max-w-3xl">
+          <div id="chart-export-container" className="w-full max-w-3xl">
             <DynamicChart chartData={results} chartConfig={config} />
           </div>
           {metadata?.showSQL && (
@@ -113,6 +116,26 @@ export const chartArtifact = new Artifact<"chart", ChartMetadata>({
         navigator.clipboard.writeText(content);
         toast.success("Copied chart data to clipboard!");
       },
+    },
+    {
+      icon: <DownloadIcon size={18} />,
+      description: "Download chart as image",
+      onClick: async () => {
+        const element = document.getElementById("chart-export-container");
+        if (!element) {
+          toast.error("Chart not found");
+          return;
+        }
+        try {
+          const dataUrl = await toPng(element, { cacheBust: true });
+          saveAs(dataUrl, "chart.png");
+          toast.success("Chart downloaded!");
+        } catch (err) {
+          toast.error("Failed to download chart");
+          console.error(err);
+        }
+      },
+      isDisabled: ({ content }) => !content,
     },
   ],
   toolbar: [],
