@@ -100,6 +100,7 @@ export function DynamicChart({
                 key={key}
                 dataKey={key}
                 fill={colors[index % colors.length]}
+                isAnimationActive={false}
               />
             ))}
           </BarChart>
@@ -143,6 +144,7 @@ export function DynamicChart({
                     type="monotone"
                     dataKey={key}
                     stroke={colors[index % colors.length]}
+                    isAnimationActive={false}
                   />
                 ))
               : chartConfig.yKeys.map((key, index) => (
@@ -151,6 +153,7 @@ export function DynamicChart({
                     type="monotone"
                     dataKey={key}
                     stroke={colors[index % colors.length]}
+                    isAnimationActive={false}
                   />
                 ))}
           </LineChart>
@@ -170,6 +173,7 @@ export function DynamicChart({
                 dataKey={key}
                 fill={colors[index % colors.length]}
                 stroke={colors[index % colors.length]}
+                isAnimationActive={false}
               />
             ))}
           </AreaChart>
@@ -184,6 +188,7 @@ export function DynamicChart({
               cx="50%"
               cy="50%"
               outerRadius={120}
+              isAnimationActive={false}
             >
               {chartData.map((_, index) => (
                 <Cell
