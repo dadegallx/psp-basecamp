@@ -19,6 +19,7 @@ type MessagesProps = {
   isReadonly: boolean;
   isArtifactVisible: boolean;
   selectedModelId: string;
+  isWidget?: boolean;
 };
 
 function PureMessages({
@@ -30,6 +31,7 @@ function PureMessages({
   regenerate,
   isReadonly,
   selectedModelId: _selectedModelId,
+  isWidget,
 }: MessagesProps) {
   const {
     containerRef: messagesContainerRef,
@@ -50,7 +52,7 @@ function PureMessages({
         ref={messagesContainerRef}
       >
         <div className="mx-auto flex min-w-0 max-w-4xl flex-col gap-4 px-2 py-4 md:gap-6 md:px-4">
-          {messages.length === 0 && <Greeting />}
+          {messages.length === 0 && !isWidget && <Greeting />}
 
           {messages.map((message, index) => (
             <PreviewMessage
@@ -108,6 +110,9 @@ export const Messages = memo(PureMessages, (prevProps, nextProps) => {
     return false;
   }
   if (prevProps.selectedModelId !== nextProps.selectedModelId) {
+    return false;
+  }
+  if (prevProps.isWidget !== nextProps.isWidget) {
     return false;
   }
   if (prevProps.messages.length !== nextProps.messages.length) {

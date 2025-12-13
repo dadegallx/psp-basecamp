@@ -62,6 +62,7 @@ function PureMultimodalInput({
   selectedModelId,
   onModelChange,
   usage,
+  isWidget,
 }: {
   chatId: string;
   input: string;
@@ -78,6 +79,7 @@ function PureMultimodalInput({
   selectedModelId: string;
   onModelChange?: (modelId: string) => void;
   usage?: AppUsage;
+  isWidget?: boolean;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { width } = useWindowSize();
@@ -365,7 +367,7 @@ function PureMultimodalInput({
             rows={1}
             value={input}
           />{" "}
-          <Context {...contextProps} />
+          {!isWidget && <Context {...contextProps} />}
         </div>
         <PromptInputToolbar className="!border-top-0 border-t-0! p-0 shadow-none dark:border-0 dark:border-transparent!">
           <PromptInputTools className="gap-0 sm:gap-0.5">
@@ -374,10 +376,12 @@ function PureMultimodalInput({
               selectedModelId={selectedModelId}
               status={status}
             />
-            <ModelSelectorCompact
-              onModelChange={onModelChange}
-              selectedModelId={selectedModelId}
-            />
+            {!isWidget && (
+              <ModelSelectorCompact
+                onModelChange={onModelChange}
+                selectedModelId={selectedModelId}
+              />
+            )}
           </PromptInputTools>
 
           {status === "submitted" ? (
@@ -414,6 +418,9 @@ export const MultimodalInput = memo(
       return false;
     }
     if (prevProps.selectedModelId !== nextProps.selectedModelId) {
+      return false;
+    }
+    if (prevProps.isWidget !== nextProps.isWidget) {
       return false;
     }
 

@@ -39,6 +39,7 @@ export function Chat({
   initialChatModel,
   initialVisibilityType,
   isReadonly,
+  isWidget,
   autoResume,
   initialLastContext,
 }: {
@@ -47,6 +48,7 @@ export function Chat({
   initialChatModel: string;
   initialVisibilityType: VisibilityType;
   isReadonly: boolean;
+  isWidget?: boolean;
   autoResume: boolean;
   initialLastContext?: AppUsage;
 }) {
@@ -173,6 +175,7 @@ export function Chat({
         <ChatHeader
           chatId={id}
           isReadonly={isReadonly}
+          isWidget={isWidget}
           selectedVisibilityType={initialVisibilityType}
         />
 
@@ -180,6 +183,7 @@ export function Chat({
           chatId={id}
           isArtifactVisible={isArtifactVisible}
           isReadonly={isReadonly}
+          isWidget={isWidget}
           messages={messages}
           regenerate={regenerate}
           selectedModelId={initialChatModel}
@@ -194,6 +198,7 @@ export function Chat({
               attachments={attachments}
               chatId={id}
               input={input}
+              isWidget={isWidget}
               messages={messages}
               onModelChange={setCurrentModelId}
               selectedModelId={currentModelId}
