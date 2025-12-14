@@ -1,16 +1,16 @@
 import { tool, type UIMessageStreamWriter } from "ai";
-import type { Session } from "next-auth";
+
 import { z } from "zod";
 import { documentHandlersByArtifactKind } from "@/lib/artifacts/server";
 import type { ChatMessage } from "@/lib/types";
 import { generateUUID } from "@/lib/utils";
 
 type CreateChartProps = {
-  session: Session;
+  userId: string;
   dataStream: UIMessageStreamWriter<ChatMessage>;
 };
 
-export const createChart = ({ session, dataStream }: CreateChartProps) =>
+export const createChart = ({ userId, dataStream }: CreateChartProps) =>
   tool({
     description:
       "Create a chart visualization from a natural language query. Use this when the user wants to visualize data, see trends, compare categories, or create graphs. The chart will be generated based on sample data.",
@@ -65,7 +65,7 @@ export const createChart = ({ session, dataStream }: CreateChartProps) =>
         id,
         title: query, // Pass full query for processing
         dataStream,
-        session,
+        userId,
       });
 
       dataStream.write({ type: "data-finish", data: null, transient: true });

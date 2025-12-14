@@ -1,11 +1,10 @@
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { Chat } from "@/components/chat";
 import { DataStreamHandler } from "@/components/data-stream-handler";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
+import { createGuestUser } from "@/lib/db/queries";
 import { generateUUID } from "@/lib/utils";
-import { auth } from "../(auth)/auth";
 
 export default function Page() {
   return (
@@ -16,21 +15,19 @@ export default function Page() {
 }
 
 async function NewChatPage() {
-  const session = await auth();
+  const cookieStore = await cookies();
+  const [user] = await createGuestUser();
 
-  if (!session) {
-    redirect("/api/auth/guest");
-  }
 
   const id = generateUUID();
 
-  const cookieStore = await cookies();
   const modelIdFromCookie = cookieStore.get("chat-model");
 
   if (!modelIdFromCookie) {
     return (
       <>
         <Chat
+          userId={user.id}
           autoResume={false}
           id={id}
           initialChatModel={DEFAULT_CHAT_MODEL}
@@ -47,6 +44,7 @@ async function NewChatPage() {
   return (
     <>
       <Chat
+        userId={user.id}
         autoResume={false}
         id={id}
         initialChatModel={modelIdFromCookie.value}

@@ -42,6 +42,7 @@ export function Chat({
   isWidget,
   autoResume,
   initialLastContext,
+  userId,
 }: {
   id: string;
   initialMessages: ChatMessage[];
@@ -51,6 +52,7 @@ export function Chat({
   isWidget?: boolean;
   autoResume: boolean;
   initialLastContext?: AppUsage;
+  userId: string;
 }) {
   const router = useRouter();
 
@@ -106,6 +108,7 @@ export function Chat({
             message: request.messages.at(-1),
             selectedChatModel: currentModelIdRef.current,
             selectedVisibilityType: visibilityType,
+            userId, // Pass userId here
             ...request.body,
           },
         };
