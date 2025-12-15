@@ -24,7 +24,8 @@ import { createChart } from "@/lib/ai/tools/create-chart";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { getWeather } from "@/lib/ai/tools/get-weather";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
-import { runQuery } from "@/lib/ai/tools/run-query";
+import { runQueryIndicators } from "@/lib/ai/tools/run-query-indicators";
+import { runQuerySurveys } from "@/lib/ai/tools/run-query-surveys";
 import { updateDocument } from "@/lib/ai/tools/update-document";
 import { isProductionEnvironment } from "@/lib/constants";
 import {
@@ -186,7 +187,8 @@ export async function POST(request: Request) {
               ? []
               : [
                   "getWeather",
-                  "runQuery",
+                  "runQueryIndicators",
+                  "runQuerySurveys",
                   "createDocument",
                   "updateDocument",
                   "requestSuggestions",
@@ -195,7 +197,8 @@ export async function POST(request: Request) {
           experimental_transform: smoothStream({ chunking: "word" }),
           tools: {
             getWeather,
-            runQuery,
+            runQueryIndicators,
+            runQuerySurveys,
             createDocument: createDocument({ userId, dataStream }),
             updateDocument: updateDocument({ userId, dataStream }),
             requestSuggestions: requestSuggestions({

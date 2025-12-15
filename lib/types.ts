@@ -5,7 +5,8 @@ import type { createChart } from "./ai/tools/create-chart";
 import type { createDocument } from "./ai/tools/create-document";
 import type { getWeather } from "./ai/tools/get-weather";
 import type { requestSuggestions } from "./ai/tools/request-suggestions";
-import type { runQuery } from "./ai/tools/run-query";
+import type { runQueryIndicators } from "./ai/tools/run-query-indicators";
+import type { runQuerySurveys } from "./ai/tools/run-query-surveys";
 import type { updateDocument } from "./ai/tools/update-document";
 import type { Suggestion } from "./db/schema";
 import type { AppUsage } from "./usage";
@@ -19,7 +20,8 @@ export const messageMetadataSchema = z.object({
 export type MessageMetadata = z.infer<typeof messageMetadataSchema>;
 
 type weatherTool = InferUITool<typeof getWeather>;
-type runQueryTool = InferUITool<typeof runQuery>;
+type runQueryIndicatorsTool = InferUITool<typeof runQueryIndicators>;
+type runQuerySurveysTool = InferUITool<typeof runQuerySurveys>;
 type createDocumentTool = InferUITool<ReturnType<typeof createDocument>>;
 type updateDocumentTool = InferUITool<ReturnType<typeof updateDocument>>;
 type requestSuggestionsTool = InferUITool<
@@ -29,7 +31,8 @@ type createChartTool = InferUITool<ReturnType<typeof createChart>>;
 
 export type ChatTools = {
   getWeather: weatherTool;
-  runQuery: runQueryTool;
+  runQueryIndicators: runQueryIndicatorsTool;
+  runQuerySurveys: runQuerySurveysTool;
   createDocument: createDocumentTool;
   updateDocument: updateDocumentTool;
   requestSuggestions: requestSuggestionsTool;

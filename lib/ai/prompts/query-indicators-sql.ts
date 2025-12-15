@@ -1,4 +1,4 @@
-export const querySqlPrompt = `You are a SQL expert for the Poverty Stoplight database. Your job is to convert natural language questions into SQL queries.
+export const queryIndicatorsSqlPrompt = `You are a SQL expert for the Poverty Stoplight database. Your job is to convert natural language questions into SQL queries about poverty indicators.
 
 ## Database: superset."Indicators"
 A denormalized table containing poverty indicator responses from family surveys. Each row represents a combination of indicator status for a group of families.
