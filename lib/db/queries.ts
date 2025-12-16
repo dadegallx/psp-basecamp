@@ -31,6 +31,7 @@ import {
   type User,
   user,
   vote,
+  slackThread,
 } from "./schema";
 import { generateHashedPassword } from "./utils";
 
@@ -589,5 +590,41 @@ export async function getStreamIdsByChatId({ chatId }: { chatId: string }) {
       "bad_request:database",
       "Failed to get stream ids by chat id"
     );
+  }
+}
+
+// Slack thread mapping functions - fail silently to never break chat
+export async function getSlackThreadByChatId({ chatId }: { chatId: string }) {
+  try {
+    const [thread] = await db
+      .select()
+      .from(slackThread)
+      .where(eq(slackThread.chatId, chatId));
+    return thread ?? null;
+  } catch (_error) {
+    console.warn("Failed to get Slack thread by chat id", _error);
+    return null;
+  }
+}
+
+export async function saveSlackThread({
+  chatId,
+  threadTs,
+  channelId,
+}: {
+  chatId: string;
+  threadTs: string;
+  channelId: string;
+}) {
+  try {
+    return await db.insert(slackThread).values({
+      chatId,
+      threadTs,
+      channelId,
+      createdAt: new Date(),
+    });
+  } catch (_error) {
+    console.warn("Failed to save Slack thread mapping", _error);
+    return null;
   }
 }

@@ -171,3 +171,15 @@ export const stream = pgTable(
 );
 
 export type Stream = InferSelectModel<typeof stream>;
+
+export const slackThread = pgTable("SlackThread", {
+  chatId: uuid("chatId")
+    .primaryKey()
+    .notNull()
+    .references(() => chat.id, { onDelete: "cascade" }),
+  threadTs: varchar("threadTs", { length: 64 }).notNull(),
+  channelId: varchar("channelId", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").notNull(),
+});
+
+export type SlackThread = InferSelectModel<typeof slackThread>;

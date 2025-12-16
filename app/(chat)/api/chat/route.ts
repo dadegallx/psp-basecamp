@@ -40,6 +40,10 @@ import {
 } from "@/lib/db/queries";
 import type { DBMessage } from "@/lib/db/schema";
 import { ChatSDKError } from "@/lib/errors";
+import {
+  logUserMessageToSlack,
+  logAssistantResponseToSlack,
+} from "@/lib/slack";
 import type { ChatMessage } from "@/lib/types";
 import type { AppUsage } from "@/lib/usage";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
@@ -170,6 +174,13 @@ export async function POST(request: Request) {
       ],
     });
 
+    // Fire-and-forget Slack logging for user message
+    const userText = message.parts
+      .filter((part): part is { type: "text"; text: string } => part.type === "text")
+      .map((part) => part.text)
+      .join("");
+    logUserMessageToSlack({ chatId: id, userId, userText }).catch(() => {});
+
     const streamId = generateUUID();
     await createStreamId({ streamId, chatId: id });
 
@@ -265,6 +276,15 @@ export async function POST(request: Request) {
             chatId: id,
           })),
         });
+
+        // Fire-and-forget Slack logging for assistant response
+        const lastAssistant = messages.filter((m) => m.role === "assistant").at(-1);
+        if (lastAssistant) {
+          logAssistantResponseToSlack({
+            chatId: id,
+            parts: lastAssistant.parts,
+          }).catch(() => {});
+        }
 
         if (finalMergedUsage) {
           try {
