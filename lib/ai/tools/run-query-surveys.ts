@@ -3,39 +3,7 @@ import { z } from "zod";
 import { myProvider } from "@/lib/ai/providers";
 import { sql } from "@/lib/neon";
 import { querySurveysSqlPrompt } from "../prompts/query-surveys-sql";
-
-/**
- * Validates that a SQL query is safe to execute (SELECT only, no destructive operations)
- */
-function validateSQL(query: string): { valid: boolean; error?: string } {
-  const normalized = query.trim().toLowerCase();
-
-  if (!normalized.startsWith("select")) {
-    return { valid: false, error: "Only SELECT queries are allowed" };
-  }
-
-  const forbidden = [
-    "drop",
-    "delete",
-    "insert",
-    "update",
-    "alter",
-    "truncate",
-    "create",
-    "grant",
-    "revoke",
-  ];
-
-  for (const keyword of forbidden) {
-    // Check for keyword as a separate word (not part of column names)
-    const regex = new RegExp(`\\b${keyword}\\b`, "i");
-    if (regex.test(normalized)) {
-      return { valid: false, error: `Forbidden keyword: ${keyword}` };
-    }
-  }
-
-  return { valid: true };
-}
+import { validateSQL, interpretResults } from "./query-utils";
 
 export const runQuerySurveys = tool({
   description:
@@ -73,13 +41,23 @@ export const runQuerySurveys = tool({
 
       // Step 3: Execute the query
       const results = await sql.query(generatedSql);
+      const rowCount = Array.isArray(results) ? results.length : 0;
 
-      // Step 4: Return results with metadata
+      // Step 4: Interpret results using AI
+      const interpretation = await interpretResults({
+        question,
+        tableName: "Surveys",
+        sql: generatedSql,
+        results: Array.isArray(results) ? results : [],
+      });
+
+      // Step 5: Return interpreted results + raw data for follow-up
       return {
         question,
+        interpretation, // Plain language explanation for the user
         sql: generatedSql,
-        results,
-        rowCount: Array.isArray(results) ? results.length : 0,
+        results, // Keep raw results for potential follow-up or verification
+        rowCount,
       };
     } catch (error) {
       const errorMessage =

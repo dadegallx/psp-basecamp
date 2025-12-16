@@ -192,7 +192,7 @@ export async function POST(request: Request) {
                   "createDocument",
                   "updateDocument",
                   "requestSuggestions",
-                  "createChart",
+                  // "createChart", // Disabled for now - chart tool not ready
                 ],
           experimental_transform: smoothStream({ chunking: "word" }),
           tools: {
