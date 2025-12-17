@@ -23,7 +23,6 @@ import { useChatVisibility } from "@/hooks/use-chat-visibility";
 import type { Vote } from "@/lib/db/schema";
 import { ChatSDKError } from "@/lib/errors";
 import type { Attachment, ChatMessage } from "@/lib/types";
-import type { AppUsage } from "@/lib/usage";
 import { fetcher, fetchWithErrorHandlers, generateUUID } from "@/lib/utils";
 import { Artifact } from "./artifact";
 import { useDataStream } from "./data-stream-provider";
@@ -41,7 +40,6 @@ export function Chat({
   isReadonly,
   isWidget,
   autoResume,
-  initialLastContext,
   userId,
 }: {
   id: string;
@@ -51,7 +49,6 @@ export function Chat({
   isReadonly: boolean;
   isWidget?: boolean;
   autoResume: boolean;
-  initialLastContext?: AppUsage;
   userId: string;
 }) {
   const router = useRouter();
@@ -76,7 +73,6 @@ export function Chat({
   const { setDataStream } = useDataStream();
 
   const [input, setInput] = useState<string>("");
-  const [usage, setUsage] = useState<AppUsage | undefined>(initialLastContext);
   const [showCreditCardAlert, setShowCreditCardAlert] = useState(false);
   const [currentModelId, setCurrentModelId] = useState(initialChatModel);
   const currentModelIdRef = useRef(currentModelId);
@@ -116,9 +112,6 @@ export function Chat({
     }),
     onData: (dataPart) => {
       setDataStream((ds) => (ds ? [...ds, dataPart] : []));
-      if (dataPart.type === "data-usage") {
-        setUsage(dataPart.data);
-      }
     },
     onFinish: () => {
       mutate(unstable_serialize(getChatHistoryPaginationKey));
@@ -212,7 +205,6 @@ export function Chat({
               setMessages={setMessages}
               status={status}
               stop={stop}
-              usage={usage}
             />
           )}
         </div>

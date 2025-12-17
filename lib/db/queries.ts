@@ -17,7 +17,6 @@ import postgres from "postgres";
 import type { ArtifactKind } from "@/components/artifact";
 import type { VisibilityType } from "@/components/visibility-selector";
 import { ChatSDKError } from "../errors";
-import type { AppUsage } from "../usage";
 import { generateUUID } from "../utils";
 import {
   type Chat,
@@ -500,25 +499,6 @@ export async function updateChatVisibilityById({
       "bad_request:database",
       "Failed to update chat visibility by id"
     );
-  }
-}
-
-export async function updateChatLastContextById({
-  chatId,
-  context,
-}: {
-  chatId: string;
-  // Store merged server-enriched usage object
-  context: AppUsage;
-}) {
-  try {
-    return await db
-      .update(chat)
-      .set({ lastContext: context })
-      .where(eq(chat.id, chatId));
-  } catch (error) {
-    console.warn("Failed to update lastContext for chat", chatId, error);
-    return;
   }
 }
 
