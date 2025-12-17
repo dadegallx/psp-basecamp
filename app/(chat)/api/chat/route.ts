@@ -199,6 +199,17 @@ export async function POST(request: Request) {
             isEnabled: isProductionEnvironment,
             functionId: "stream-text",
           },
+          providerOptions:
+            selectedChatModel === "chat-model-reasoning"
+              ? {
+                  google: {
+                    thinkingConfig: {
+                      includeThoughts: true,
+                      thinkingBudget: 8192,
+                    },
+                  },
+                }
+              : undefined,
         });
 
         result.consumeStream();
