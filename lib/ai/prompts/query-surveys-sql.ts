@@ -9,7 +9,11 @@ ${surveysSemanticLayerForSQL}
 
 ### Columns (Full Reference):
 - **snapshot_id** (bigint): Unique survey snapshot identifier
-- **country_name** (varchar): Country name (e.g., "Paraguay", "South Africa", "Unknown")
+- **country_name** (varchar): Country name. IMPORTANT: Use exact names as stored in database:
+  - "United States of America" (NOT "US", "USA", "United States", "America")
+  - "United Kingdom" (NOT "UK", "Britain", "England")
+  - "Viet Nam" (NOT "Vietnam")
+  - Other countries use full official names (e.g., "Paraguay", "South Africa", "Colombia")
 - **is_last** (boolean): TRUE if this is the family's most recent survey
 - **days_since_previous** (int): Days since the previous survey (NULL for baseline)
 - **days_since_baseline** (int): Days since the first survey (0 for baseline)
@@ -66,6 +70,20 @@ SELECT country_name, SUM(survey_count) as total_surveys
 FROM superset."Surveys"
 GROUP BY country_name
 ORDER BY total_surveys DESC
+\`\`\`
+
+**Q: How many surveys in the US / United States / America?**
+\`\`\`sql
+SELECT SUM(survey_count) as total_surveys
+FROM superset."Surveys"
+WHERE country_name = 'United States of America'
+\`\`\`
+
+**Q: How many surveys in the UK / Britain?**
+\`\`\`sql
+SELECT SUM(survey_count) as total_surveys
+FROM superset."Surveys"
+WHERE country_name = 'United Kingdom'
 \`\`\`
 
 **Q: How many baseline vs follow-up surveys?**
