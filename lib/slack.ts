@@ -20,18 +20,11 @@ interface SlackBlock {
 
 // Environment check
 function isSlackEnabled(): boolean {
-  const hasToken = Boolean(process.env.SLACK_BOT_TOKEN);
-  const hasChannel = Boolean(process.env.SLACK_CHANNEL_ID);
-  const enabled = isProductionEnvironment && hasToken && hasChannel;
-
-  console.log("[Slack] isSlackEnabled check:", {
-    isProductionEnvironment,
-    hasToken,
-    hasChannel,
-    enabled,
-  });
-
-  return enabled;
+  return (
+    isProductionEnvironment &&
+    Boolean(process.env.SLACK_BOT_TOKEN) &&
+    Boolean(process.env.SLACK_CHANNEL_ID)
+  );
 }
 
 // Build Slack Block Kit message for user message
@@ -137,16 +130,7 @@ async function postToSlack(
   const token = process.env.SLACK_BOT_TOKEN;
   const channelId = process.env.SLACK_CHANNEL_ID;
 
-  console.log("[Slack] postToSlack called:", {
-    hasToken: Boolean(token),
-    tokenPrefix: token?.slice(0, 10),
-    channelId,
-    threadTs,
-    blockCount: blocks.length,
-  });
-
   if (!token || !channelId) {
-    console.error("[Slack] Missing token or channelId");
     return null;
   }
 
@@ -173,20 +157,14 @@ async function postToSlack(
 
     const data = (await response.json()) as SlackPostMessageResponse;
 
-    console.log("[Slack] API response:", {
-      ok: data.ok,
-      ts: data.ts,
-      error: data.error,
-    });
-
     if (!data.ok) {
-      console.error("[Slack] API error:", data.error);
+      console.warn("[Slack] API error:", data.error);
       return null;
     }
 
     return data;
   } catch (error) {
-    console.error("[Slack] Failed to post:", error);
+    console.warn("[Slack] Failed to post:", error);
     return null;
   }
 }
@@ -203,26 +181,18 @@ export async function logUserMessageToSlack({
   userText: string;
   messageId: string;
 }): Promise<void> {
-  console.log("[Slack] logUserMessageToSlack called:", { chatId, messageId });
-
   if (!isSlackEnabled()) {
-    console.log("[Slack] Slack is disabled, skipping user message");
     return;
   }
 
   try {
     const channelId = process.env.SLACK_CHANNEL_ID!;
-
-    // Check if thread already exists for this chat
     const existingThread = await getSlackThreadByChatId({ chatId });
-    console.log("[Slack] Existing thread lookup:", { chatId, existingThread });
-
     const blocks = buildUserMessageBlocks(userText, chatId, messageId, userId);
     const response = await postToSlack(blocks, existingThread?.threadTs);
 
     // If this is the first message (no existing thread), save the thread mapping
     if (!existingThread && response?.ts) {
-      console.log("[Slack] Saving new thread:", { chatId, ts: response.ts });
       await saveSlackThread({
         chatId,
         threadTs: response.ts,
@@ -230,7 +200,7 @@ export async function logUserMessageToSlack({
       });
     }
   } catch (error) {
-    console.error("[Slack] User message logging failed:", error);
+    console.warn("[Slack] User message logging failed:", error);
   }
 }
 
@@ -245,34 +215,21 @@ export async function logAssistantResponseToSlack({
   messageId: string;
   parts: unknown[];
 }): Promise<void> {
-  console.log("[Slack] logAssistantResponseToSlack called:", {
-    chatId,
-    messageId,
-    partsCount: parts.length,
-    partTypes: parts.map((p) => (typeof p === "object" && p !== null && "type" in p ? (p as { type: string }).type : "unknown")),
-  });
-
   if (!isSlackEnabled()) {
-    console.log("[Slack] Slack is disabled, skipping assistant response");
     return;
   }
 
   try {
-    // Get the thread for this chat
     const existingThread = await getSlackThreadByChatId({ chatId });
-    console.log("[Slack] Thread lookup for assistant response:", { chatId, existingThread });
 
     if (!existingThread) {
-      console.warn("[Slack] No thread found for chat:", chatId);
       return;
     }
 
     let isFirstText = true;
 
-    // Iterate through parts in order and post each separately
     for (const part of parts) {
       if (typeof part !== "object" || part === null || !("type" in part)) {
-        console.log("[Slack] Skipping invalid part:", part);
         continue;
       }
 
@@ -284,7 +241,6 @@ export async function logAssistantResponseToSlack({
       };
 
       if (typedPart.type === "text" && typedPart.text) {
-        console.log("[Slack] Processing text part:", { textLength: typedPart.text.length, isFirstText });
         const blocks = buildTextBlocks(typedPart.text, isFirstText);
         await postToSlack(blocks, existingThread.threadTs);
 
@@ -295,18 +251,13 @@ export async function logAssistantResponseToSlack({
           isFirstText = false;
         }
       } else if (typedPart.type.startsWith("tool-") && typedPart.type !== "tool-invocation") {
-        // Extract tool name from type (e.g., "tool-runQuerySurveys" -> "runQuerySurveys")
         const toolName = typedPart.type.replace("tool-", "");
-        console.log("[Slack] Processing tool part:", { toolName, type: typedPart.type });
         const blocks = buildToolCallBlocks(toolName, part as Record<string, unknown>);
         await postToSlack(blocks, existingThread.threadTs);
-      } else {
-        console.log("[Slack] Part type not handled:", typedPart.type);
       }
     }
-    console.log("[Slack] Finished processing assistant response");
   } catch (error) {
-    console.error("[Slack] Assistant response logging failed:", error);
+    console.warn("[Slack] Assistant response logging failed:", error);
   }
 }
 
