@@ -235,12 +235,17 @@ export async function POST(request: Request) {
 
         // Fire-and-forget Slack logging for assistant response
         const lastAssistant = messages.filter((m) => m.role === "assistant").at(-1);
+        console.log("[Slack] onFinish - assistant message:", {
+          hasLastAssistant: Boolean(lastAssistant),
+          messageId: lastAssistant?.id,
+          partsCount: lastAssistant?.parts?.length,
+        });
         if (lastAssistant) {
           logAssistantResponseToSlack({
             chatId: id,
             messageId: lastAssistant.id,
             parts: lastAssistant.parts,
-          }).catch(() => {});
+          }).catch((err) => console.error("[Slack] Assistant logging error:", err));
         }
       },
       onError: () => {
