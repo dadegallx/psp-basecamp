@@ -76,7 +76,7 @@ curl --no-buffer -X POST http://localhost:3000/api/chat \
 
 | Field | Values | Description |
 |-------|--------|-------------|
-| `selectedChatModel` | `chat-model`, `chat-model-reasoning` | Model to use |
+| `selectedChatModel` | `chat-model` | Model to use |
 | `selectedVisibilityType` | `public`, `private` | Chat visibility |
 
 ## Notes

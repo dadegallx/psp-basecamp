@@ -1,15 +1,9 @@
 import type { InferUITool, UIMessage } from "ai";
 import { z } from "zod";
 import type { ArtifactKind } from "@/components/artifact";
-import type { createChart } from "./ai/tools/create-chart";
-import type { createDocument } from "./ai/tools/create-document";
-import type { getWeather } from "./ai/tools/get-weather";
-import type { requestSuggestions } from "./ai/tools/request-suggestions";
-import type { runQueryIndicators } from "./ai/tools/run-query-indicators";
-import type { runQuerySurveys } from "./ai/tools/run-query-surveys";
-import type { updateDocument } from "./ai/tools/update-document";
 import type { Suggestion } from "./db/schema";
-import type { AppUsage } from "./usage";
+import type { loadSkill } from "./ai/tools/load-skill";
+import type { executeQuery } from "./ai/tools/execute-query";
 
 export type DataPart = { type: "append-message"; message: string };
 
@@ -19,24 +13,12 @@ export const messageMetadataSchema = z.object({
 
 export type MessageMetadata = z.infer<typeof messageMetadataSchema>;
 
-type weatherTool = InferUITool<typeof getWeather>;
-type runQueryIndicatorsTool = InferUITool<typeof runQueryIndicators>;
-type runQuerySurveysTool = InferUITool<typeof runQuerySurveys>;
-type createDocumentTool = InferUITool<ReturnType<typeof createDocument>>;
-type updateDocumentTool = InferUITool<ReturnType<typeof updateDocument>>;
-type requestSuggestionsTool = InferUITool<
-  ReturnType<typeof requestSuggestions>
->;
-type createChartTool = InferUITool<ReturnType<typeof createChart>>;
+type loadSkillTool = InferUITool<typeof loadSkill>;
+type executeQueryTool = InferUITool<typeof executeQuery>;
 
 export type ChatTools = {
-  getWeather: weatherTool;
-  runQueryIndicators: runQueryIndicatorsTool;
-  runQuerySurveys: runQuerySurveysTool;
-  createDocument: createDocumentTool;
-  updateDocument: updateDocumentTool;
-  requestSuggestions: requestSuggestionsTool;
-  createChart: createChartTool;
+  loadSkill: loadSkillTool;
+  executeQuery: executeQueryTool;
 };
 
 export type CustomUIDataTypes = {
@@ -52,7 +34,6 @@ export type CustomUIDataTypes = {
   kind: ArtifactKind;
   clear: null;
   finish: null;
-  usage: AppUsage;
 };
 
 export type ChatMessage = UIMessage<
