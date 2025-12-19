@@ -20,11 +20,18 @@ interface SlackBlock {
 
 // Environment check
 function isSlackEnabled(): boolean {
-  return (
-    isProductionEnvironment &&
-    Boolean(process.env.SLACK_BOT_TOKEN) &&
-    Boolean(process.env.SLACK_CHANNEL_ID)
-  );
+  const hasToken = Boolean(process.env.SLACK_BOT_TOKEN);
+  const hasChannel = Boolean(process.env.SLACK_CHANNEL_ID);
+  const enabled = isProductionEnvironment && hasToken && hasChannel;
+
+  console.log("[Slack] isSlackEnabled check:", {
+    isProductionEnvironment,
+    hasToken,
+    hasChannel,
+    enabled,
+  });
+
+  return enabled;
 }
 
 // Build Slack Block Kit message for user message
@@ -130,7 +137,16 @@ async function postToSlack(
   const token = process.env.SLACK_BOT_TOKEN;
   const channelId = process.env.SLACK_CHANNEL_ID;
 
+  console.log("[Slack] postToSlack called:", {
+    hasToken: Boolean(token),
+    tokenPrefix: token?.slice(0, 10),
+    channelId,
+    threadTs,
+    blockCount: blocks.length,
+  });
+
   if (!token || !channelId) {
+    console.error("[Slack] Missing token or channelId");
     return null;
   }
 
@@ -157,14 +173,20 @@ async function postToSlack(
 
     const data = (await response.json()) as SlackPostMessageResponse;
 
+    console.log("[Slack] API response:", {
+      ok: data.ok,
+      ts: data.ts,
+      error: data.error,
+    });
+
     if (!data.ok) {
-      console.warn("Slack API error:", data.error);
+      console.error("[Slack] API error:", data.error);
       return null;
     }
 
     return data;
   } catch (error) {
-    console.warn("Failed to post to Slack:", error);
+    console.error("[Slack] Failed to post:", error);
     return null;
   }
 }
@@ -181,7 +203,10 @@ export async function logUserMessageToSlack({
   userText: string;
   messageId: string;
 }): Promise<void> {
+  console.log("[Slack] logUserMessageToSlack called:", { chatId, messageId });
+
   if (!isSlackEnabled()) {
+    console.log("[Slack] Slack is disabled, skipping user message");
     return;
   }
 
@@ -190,12 +215,14 @@ export async function logUserMessageToSlack({
 
     // Check if thread already exists for this chat
     const existingThread = await getSlackThreadByChatId({ chatId });
+    console.log("[Slack] Existing thread lookup:", { chatId, existingThread });
 
     const blocks = buildUserMessageBlocks(userText, chatId, messageId, userId);
     const response = await postToSlack(blocks, existingThread?.threadTs);
 
     // If this is the first message (no existing thread), save the thread mapping
     if (!existingThread && response?.ts) {
+      console.log("[Slack] Saving new thread:", { chatId, ts: response.ts });
       await saveSlackThread({
         chatId,
         threadTs: response.ts,
@@ -203,8 +230,7 @@ export async function logUserMessageToSlack({
       });
     }
   } catch (error) {
-    // Fail silently
-    console.warn("Slack user message logging failed:", error);
+    console.error("[Slack] User message logging failed:", error);
   }
 }
 
