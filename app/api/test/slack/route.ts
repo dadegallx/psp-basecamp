@@ -30,12 +30,14 @@ export async function GET() {
   // Generate test IDs
   const chatId = generateUUID();
   const userId = generateUUID();
+  const messageId = generateUUID();
 
   // 1. Post test user message (creates new thread)
   const userResponse = await testPostUserMessage({
     chatId,
     userId,
     userText: "This is a test message from the Slack integration test endpoint.",
+    messageId,
   });
 
   if (!userResponse?.ok || !userResponse.ts) {
@@ -92,6 +94,7 @@ export async function GET() {
     testIds: {
       chatId,
       userId,
+      messageId,
     },
     userMessage: {
       ok: userResponse.ok,

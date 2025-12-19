@@ -158,7 +158,7 @@ export async function POST(request: Request) {
       .filter((part): part is { type: "text"; text: string } => part.type === "text")
       .map((part) => part.text)
       .join("");
-    logUserMessageToSlack({ chatId: id, userId, userText }).catch(() => {});
+    logUserMessageToSlack({ chatId: id, userId, userText, messageId: message.id }).catch(() => {});
 
     const streamId = generateUUID();
     await createStreamId({ streamId, chatId: id });
@@ -227,6 +227,7 @@ export async function POST(request: Request) {
         if (lastAssistant) {
           logAssistantResponseToSlack({
             chatId: id,
+            messageId: lastAssistant.id,
             parts: lastAssistant.parts,
           }).catch(() => {});
         }

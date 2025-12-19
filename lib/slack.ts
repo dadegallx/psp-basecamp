@@ -31,6 +31,7 @@ function isSlackEnabled(): boolean {
 function buildUserMessageBlocks(
   userText: string,
   chatId: string,
+  messageId: string,
   userId: string
 ): SlackBlock[] {
   const text = userText.length > 2900
@@ -50,7 +51,7 @@ function buildUserMessageBlocks(
       elements: [
         {
           type: "mrkdwn",
-          text: `\`${chatId.slice(0, 8)}\` · \`${userId.slice(0, 8)}\``,
+          text: `\`${chatId.slice(0, 8)}\` · \`${messageId.slice(0, 8)}\` · \`${userId.slice(0, 8)}\``,
         },
       ],
     },
@@ -78,9 +79,28 @@ function buildTextBlocks(text: string, isFirst: boolean): SlackBlock[] {
   ];
 }
 
-// Build blocks for a tool result
-function buildToolBlocks(toolName: string, result: string): SlackBlock[] {
-  const truncated = result.length > 500 ? `${result.slice(0, 500)}...` : result;
+// Build context block for assistant message IDs
+function buildAssistantContextBlocks(chatId: string, messageId: string): SlackBlock[] {
+  return [
+    {
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `\`${chatId.slice(0, 8)}\` · \`${messageId.slice(0, 8)}\``,
+        },
+      ],
+    },
+  ];
+}
+
+// Build blocks for a tool call (with full JSON)
+function buildToolCallBlocks(toolName: string, toolCallPart: Record<string, unknown>): SlackBlock[] {
+  // Stringify the entire tool call object
+  const fullJson = JSON.stringify(toolCallPart, null, 2);
+  const truncated = fullJson.length > 1000
+    ? `${fullJson.slice(0, 1000)}...\n_(truncated)_`
+    : fullJson;
 
   return [
     {
@@ -96,7 +116,7 @@ function buildToolBlocks(toolName: string, result: string): SlackBlock[] {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `\`\`\`${truncated}\`\`\``,
+        text: `\`\`\`json\n${truncated}\n\`\`\``,
       },
     },
   ];
@@ -154,10 +174,12 @@ export async function logUserMessageToSlack({
   chatId,
   userId,
   userText,
+  messageId,
 }: {
   chatId: string;
   userId: string;
   userText: string;
+  messageId: string;
 }): Promise<void> {
   if (!isSlackEnabled()) {
     return;
@@ -169,7 +191,7 @@ export async function logUserMessageToSlack({
     // Check if thread already exists for this chat
     const existingThread = await getSlackThreadByChatId({ chatId });
 
-    const blocks = buildUserMessageBlocks(userText, chatId, userId);
+    const blocks = buildUserMessageBlocks(userText, chatId, messageId, userId);
     const response = await postToSlack(blocks, existingThread?.threadTs);
 
     // If this is the first message (no existing thread), save the thread mapping
@@ -190,9 +212,11 @@ export async function logUserMessageToSlack({
 // Posts each part (text, tool result) as a separate message in order
 export async function logAssistantResponseToSlack({
   chatId,
+  messageId,
   parts,
 }: {
   chatId: string;
+  messageId: string;
   parts: unknown[];
 }): Promise<void> {
   if (!isSlackEnabled()) {
@@ -226,13 +250,17 @@ export async function logAssistantResponseToSlack({
       if (typedPart.type === "text" && typedPart.text) {
         const blocks = buildTextBlocks(typedPart.text, isFirstText);
         await postToSlack(blocks, existingThread.threadTs);
-        isFirstText = false;
-      } else if (typedPart.type === "tool-invocation" && typedPart.toolName && typedPart.result !== undefined) {
-        // Format result as string
-        const resultStr = typeof typedPart.result === "string"
-          ? typedPart.result
-          : JSON.stringify(typedPart.result, null, 2);
-        const blocks = buildToolBlocks(typedPart.toolName, resultStr);
+
+        // Add context blocks with IDs after first text block
+        if (isFirstText) {
+          const contextBlocks = buildAssistantContextBlocks(chatId, messageId);
+          await postToSlack(contextBlocks, existingThread.threadTs);
+          isFirstText = false;
+        }
+      } else if (typedPart.type.startsWith("tool-") && typedPart.type !== "tool-invocation") {
+        // Extract tool name from type (e.g., "tool-runQuerySurveys" -> "runQuerySurveys")
+        const toolName = typedPart.type.replace("tool-", "");
+        const blocks = buildToolCallBlocks(toolName, part as Record<string, unknown>);
         await postToSlack(blocks, existingThread.threadTs);
       }
     }
@@ -257,12 +285,14 @@ export async function testPostUserMessage({
   chatId,
   userId,
   userText,
+  messageId,
 }: {
   chatId: string;
   userId: string;
   userText: string;
+  messageId: string;
 }): Promise<SlackTestResponse | null> {
-  const blocks = buildUserMessageBlocks(userText, chatId, userId);
+  const blocks = buildUserMessageBlocks(userText, chatId, messageId, userId);
   return postToSlack(blocks);
 }
 
@@ -290,7 +320,7 @@ export async function testPostAssistantResponse({
       const resultStr = typeof part.result === "string"
         ? part.result
         : JSON.stringify(part.result, null, 2);
-      const blocks = buildToolBlocks(part.toolName, resultStr);
+      const blocks = buildToolCallBlocks(part.toolName, part as unknown as Record<string, unknown>);
       const response = await postToSlack(blocks, threadTs);
       if (response) responses.push(response);
     }
