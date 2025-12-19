@@ -1,4 +1,3 @@
-import { geolocation } from "@vercel/functions";
 import {
   convertToModelMessages,
   createUIMessageStream,
@@ -7,7 +6,6 @@ import {
   stepCountIs,
   streamText,
 } from "ai";
-import { unstable_cache as cache } from "next/cache";
 import { after } from "next/server";
 import {
   createResumableStreamContext,
@@ -15,15 +13,10 @@ import {
 } from "resumable-stream";
 import type { VisibilityType } from "@/components/visibility-selector";
 import type { ChatModel } from "@/lib/ai/models";
-import { type RequestHints, systemPrompt } from "@/lib/ai/prompts/system";
+import { systemPrompt } from "@/lib/ai/prompts/system";
 import { myProvider } from "@/lib/ai/providers";
-import { createChart } from "@/lib/ai/tools/create-chart";
-import { createDocument } from "@/lib/ai/tools/create-document";
-import { getWeather } from "@/lib/ai/tools/get-weather";
-import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
-import { runQueryIndicators } from "@/lib/ai/tools/run-query-indicators";
-import { runQuerySurveys } from "@/lib/ai/tools/run-query-surveys";
-import { updateDocument } from "@/lib/ai/tools/update-document";
+import { executeQuery } from "@/lib/ai/tools/execute-query";
+import { loadSkill } from "@/lib/ai/tools/load-skill";
 import { isProductionEnvironment } from "@/lib/constants";
 import {
   createStreamId,
@@ -103,7 +96,7 @@ export async function POST(request: Request) {
     });
 
     if (messageCount > MAX_MESSAGES_PER_DAY) {
-       return new ChatSDKError("rate_limit:chat").toResponse();
+      return new ChatSDKError("rate_limit:chat").toResponse();
     }
 
     const chat = await getChatById({ id });
@@ -131,15 +124,6 @@ export async function POST(request: Request) {
 
     const uiMessages = [...convertToUIMessages(messagesFromDb), message];
 
-    const { longitude, latitude, city, country } = geolocation(request);
-
-    const requestHints: RequestHints = {
-      longitude,
-      latitude,
-      city,
-      country,
-    };
-
     await saveMessages({
       messages: [
         {
@@ -155,70 +139,46 @@ export async function POST(request: Request) {
 
     // Fire-and-forget Slack logging for user message
     const userText = message.parts
-      .filter((part): part is { type: "text"; text: string } => part.type === "text")
+      .filter(
+        (part): part is { type: "text"; text: string } => part.type === "text"
+      )
       .map((part) => part.text)
       .join("");
-    logUserMessageToSlack({ chatId: id, userId, userText, messageId: message.id }).catch(() => {});
+    logUserMessageToSlack({
+      chatId: id,
+      userId,
+      userText,
+      messageId: message.id,
+    }).catch(() => {});
 
     const streamId = generateUUID();
     await createStreamId({ streamId, chatId: id });
 
     const stream = createUIMessageStream({
-      execute: ({ writer: dataStream }) => {
+      execute: async ({ writer }) => {
         const result = streamText({
           model: myProvider.languageModel(selectedChatModel),
-          system: systemPrompt({ selectedChatModel, requestHints }),
+          system: systemPrompt(),
           messages: convertToModelMessages(uiMessages),
-          stopWhen: stepCountIs(5),
-          experimental_activeTools:
-            selectedChatModel === "chat-model-reasoning"
-              ? []
-              : [
-                  "getWeather",
-                  "runQueryIndicators",
-                  "runQuerySurveys",
-                  "createDocument",
-                  "updateDocument",
-                  "requestSuggestions",
-                  // "createChart", // Disabled for now - chart tool not ready
-                ],
+          stopWhen: stepCountIs(10),
           experimental_transform: smoothStream({ chunking: "word" }),
           tools: {
-            getWeather,
-            runQueryIndicators,
-            runQuerySurveys,
-            createDocument: createDocument({ userId, dataStream }),
-            updateDocument: updateDocument({ userId, dataStream }),
-            requestSuggestions: requestSuggestions({
-              userId,
-              dataStream,
-            }),
-            createChart: createChart({ userId, dataStream }),
+            loadSkill,
+            executeQuery,
           },
           experimental_telemetry: {
             isEnabled: isProductionEnvironment,
             functionId: "stream-text",
           },
-          providerOptions:
-            selectedChatModel === "chat-model-reasoning"
-              ? {
-                  google: {
-                    thinkingConfig: {
-                      includeThoughts: true,
-                      thinkingBudget: 8192,
-                    },
-                  },
-                }
-              : undefined,
         });
 
-        result.consumeStream();
-
-        dataStream.merge(
+        writer.merge(
           result.toUIMessageStream({
             sendReasoning: true,
           })
         );
+
+        await result.consumeStream();
       },
       generateId: generateUUID,
       onFinish: async ({ messages }) => {
@@ -249,16 +209,6 @@ export async function POST(request: Request) {
         return "Oops, an error occurred!";
       },
     });
-
-    // const streamContext = getStreamContext();
-
-    // if (streamContext) {
-    //   return new Response(
-    //     await streamContext.resumableStream(streamId, () =>
-    //       stream.pipeThrough(new JsonToSseTransformStream())
-    //     )
-    //   );
-    // }
 
     return new Response(stream.pipeThrough(new JsonToSseTransformStream()));
   } catch (error) {
@@ -291,29 +241,10 @@ export async function DELETE(request: Request) {
     return new ChatSDKError("bad_request:api").toResponse();
   }
 
-  // NOTE: In guest mode, we can't easily verify if the user truly "owns" the chat for deletion
-  // without passing userId in search params or headers.
-  // For simplicity keeping standard approach, we might need to pass userId in params?
-  // But for now, user might delete their own chat from UI.
-  // The UI calls this with just ID.
-  // We can't verify ownership without auth session or passing userId.
-  // Let's assume for now we allow deletion by ID if we don't have sensitive data,
-  // OR strictly we should require userId.
-  // Given "As simple as possible", I'll skip strict check OR (better) logic:
-  // The UI should probably pass userId if we want to secure it.
-  // But standard DELETE request usually relies on Cookie/Header auth.
-  // Since we removed it, anyone with ID can delete.
-  // I will just proceed with delete for matched ID.
-  // To be slightly safer, we could check if chat exists.
-
-  // Ideally, valid implementation changes UI to pass userId in query param too.
-  // But I won't change UI for DELETE unless necessary.
-  // Let's just allow deletion by ID.
-
   try {
-     const deletedChat = await deleteChatById({ id });
-     return Response.json(deletedChat, { status: 200 });
+    const deletedChat = await deleteChatById({ id });
+    return Response.json(deletedChat, { status: 200 });
   } catch (err) {
-      return new ChatSDKError("bad_request:api").toResponse();
+    return new ChatSDKError("bad_request:api").toResponse();
   }
 }
