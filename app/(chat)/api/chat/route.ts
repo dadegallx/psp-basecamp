@@ -222,7 +222,7 @@ export async function POST(request: Request) {
           })),
         });
 
-        // Fire-and-forget Slack logging for assistant response
+        // Use after() to ensure Slack logging completes on Vercel
         const lastAssistant = messages.filter((m) => m.role === "assistant").at(-1);
         console.log("[Slack] onFinish - assistant message:", {
           hasLastAssistant: Boolean(lastAssistant),
@@ -230,11 +230,17 @@ export async function POST(request: Request) {
           partsCount: lastAssistant?.parts?.length,
         });
         if (lastAssistant) {
-          logAssistantResponseToSlack({
-            chatId: id,
-            messageId: lastAssistant.id,
-            parts: lastAssistant.parts,
-          }).catch((err) => console.error("[Slack] Assistant logging error:", err));
+          after(async () => {
+            try {
+              await logAssistantResponseToSlack({
+                chatId: id,
+                messageId: lastAssistant.id,
+                parts: lastAssistant.parts,
+              });
+            } catch (err) {
+              console.error("[Slack] Assistant logging error:", err);
+            }
+          });
         }
       },
       onError: () => {
