@@ -245,16 +245,25 @@ export async function logAssistantResponseToSlack({
   messageId: string;
   parts: unknown[];
 }): Promise<void> {
+  console.log("[Slack] logAssistantResponseToSlack called:", {
+    chatId,
+    messageId,
+    partsCount: parts.length,
+    partTypes: parts.map((p) => (typeof p === "object" && p !== null && "type" in p ? (p as { type: string }).type : "unknown")),
+  });
+
   if (!isSlackEnabled()) {
+    console.log("[Slack] Slack is disabled, skipping assistant response");
     return;
   }
 
   try {
     // Get the thread for this chat
     const existingThread = await getSlackThreadByChatId({ chatId });
+    console.log("[Slack] Thread lookup for assistant response:", { chatId, existingThread });
 
     if (!existingThread) {
-      console.warn("No Slack thread found for chat:", chatId);
+      console.warn("[Slack] No thread found for chat:", chatId);
       return;
     }
 
@@ -263,6 +272,7 @@ export async function logAssistantResponseToSlack({
     // Iterate through parts in order and post each separately
     for (const part of parts) {
       if (typeof part !== "object" || part === null || !("type" in part)) {
+        console.log("[Slack] Skipping invalid part:", part);
         continue;
       }
 
@@ -274,6 +284,7 @@ export async function logAssistantResponseToSlack({
       };
 
       if (typedPart.type === "text" && typedPart.text) {
+        console.log("[Slack] Processing text part:", { textLength: typedPart.text.length, isFirstText });
         const blocks = buildTextBlocks(typedPart.text, isFirstText);
         await postToSlack(blocks, existingThread.threadTs);
 
@@ -286,12 +297,16 @@ export async function logAssistantResponseToSlack({
       } else if (typedPart.type.startsWith("tool-") && typedPart.type !== "tool-invocation") {
         // Extract tool name from type (e.g., "tool-runQuerySurveys" -> "runQuerySurveys")
         const toolName = typedPart.type.replace("tool-", "");
+        console.log("[Slack] Processing tool part:", { toolName, type: typedPart.type });
         const blocks = buildToolCallBlocks(toolName, part as Record<string, unknown>);
         await postToSlack(blocks, existingThread.threadTs);
+      } else {
+        console.log("[Slack] Part type not handled:", typedPart.type);
       }
     }
+    console.log("[Slack] Finished processing assistant response");
   } catch (error) {
-    console.warn("Slack assistant response logging failed:", error);
+    console.error("[Slack] Assistant response logging failed:", error);
   }
 }
 
