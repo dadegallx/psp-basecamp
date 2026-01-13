@@ -31,10 +31,10 @@ export default function WidgetPage() {
     generateId: generateUUID,
     onData: (dataPart) => {
       // Capture Slack thread ID from server response
-      if (dataPart && typeof dataPart === "object" && "slackThreadTs" in dataPart) {
-        const ts = (dataPart as { slackThreadTs: string }).slackThreadTs;
-        if (ts && !slackThreadTs) {
-          setSlackThreadTs(ts);
+      const part = dataPart as { type?: string; data?: { slackThreadTs?: string } };
+      if (part.type === "data-slack-thread" && part.data?.slackThreadTs) {
+        if (!slackThreadTs) {
+          setSlackThreadTs(part.data.slackThreadTs);
         }
       }
     },

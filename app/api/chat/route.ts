@@ -28,12 +28,13 @@ interface ChatRequestBody {
     role: "user" | "assistant";
     parts: Array<{ type: string; text?: string }>;
   }>;
+  slackThreadTs?: string;
 }
 
 export async function POST(request: Request) {
   try {
     const body: ChatRequestBody = await request.json();
-    const { id: chatId, messages } = body;
+    const { id: chatId, messages, slackThreadTs: incomingThreadTs } = body;
 
     // Get the last user message for Slack logging
     const lastUserMessage = messages.filter((m) => m.role === "user").at(-1);
@@ -43,18 +44,28 @@ export async function POST(request: Request) {
         .map((p) => p.text)
         .join("") ?? "";
 
-    // Fire-and-forget Slack logging for user message
+    // Log user message to Slack and get thread timestamp
+    let slackThreadTs: string | null = incomingThreadTs ?? null;
     if (lastUserMessage) {
-      logUserMessageToSlack({
+      slackThreadTs = await logUserMessageToSlack({
         chatId,
         userText,
         messageId: lastUserMessage.id,
-      }).catch(() => {});
+        slackThreadTs: incomingThreadTs,
+      });
     }
 
     // Create the streaming response
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
+        // Send Slack thread ID to client for future requests
+        if (slackThreadTs) {
+          writer.write({
+            type: "data-slack-thread",
+            data: { slackThreadTs },
+            transient: true,
+          });
+        }
         const result = streamText({
           model: myProvider.languageModel("chat-model"),
           system: systemPrompt(),
@@ -81,16 +92,16 @@ export async function POST(request: Request) {
       },
       generateId: generateUUID,
       onFinish: async ({ messages: responseMessages }) => {
-        // Log assistant response to Slack (fire-and-forget)
+        // Log assistant response to Slack
         const lastAssistant = responseMessages
           .filter((m) => m.role === "assistant")
           .at(-1);
 
-        if (lastAssistant) {
-          logAssistantResponseToSlack({
-            chatId,
+        if (lastAssistant && slackThreadTs) {
+          await logAssistantResponseToSlack({
             parts: lastAssistant.parts,
-          }).catch(() => {});
+            slackThreadTs,
+          });
         }
       },
       onError: () => {

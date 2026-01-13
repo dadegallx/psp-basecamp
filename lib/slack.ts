@@ -2,10 +2,6 @@ import "server-only";
 
 import { sanitizeText } from "./utils";
 
-// In-memory storage for Slack thread mappings
-// This persists for the lifetime of the serverless function
-const slackThreads = new Map<string, string>();
-
 // Types
 interface SlackPostMessageResponse {
   ok: boolean;
@@ -21,7 +17,7 @@ interface SlackBlock {
 }
 
 // Environment check
-function isSlackEnabled(): boolean {
+export function isSlackEnabled(): boolean {
   return (
     process.env.SLACK_ENABLED === "true" &&
     Boolean(process.env.SLACK_BOT_TOKEN) &&
@@ -160,52 +156,48 @@ async function postToSlack(
 }
 
 // Main export: Log user message to Slack
+// Returns the thread timestamp (either existing or newly created)
 export async function logUserMessageToSlack({
   chatId,
   userText,
   messageId,
+  slackThreadTs,
 }: {
   chatId: string;
   userText: string;
   messageId: string;
-}): Promise<void> {
+  slackThreadTs?: string;
+}): Promise<string | null> {
   if (!isSlackEnabled()) {
-    return;
+    return slackThreadTs ?? null;
   }
 
   try {
-    const existingThreadTs = slackThreads.get(chatId);
     const blocks = buildUserMessageBlocks(userText, chatId, messageId);
-    const response = await postToSlack(blocks, existingThreadTs);
+    const response = await postToSlack(blocks, slackThreadTs);
 
-    // If this is the first message (no existing thread), save the thread mapping
-    if (!existingThreadTs && response?.ts) {
-      slackThreads.set(chatId, response.ts);
-    }
+    // Return the thread timestamp (existing or new)
+    return slackThreadTs ?? response?.ts ?? null;
   } catch (error) {
     console.warn("[Slack] User message logging failed:", error);
+    return slackThreadTs ?? null;
   }
 }
 
 // Main export: Log assistant response to Slack
+// Requires slackThreadTs to be passed from client
 export async function logAssistantResponseToSlack({
-  chatId,
   parts,
+  slackThreadTs,
 }: {
-  chatId: string;
   parts: unknown[];
+  slackThreadTs?: string;
 }): Promise<void> {
-  if (!isSlackEnabled()) {
+  if (!isSlackEnabled() || !slackThreadTs) {
     return;
   }
 
   try {
-    const threadTs = slackThreads.get(chatId);
-
-    if (!threadTs) {
-      return;
-    }
-
     let isFirstText = true;
 
     for (const part of parts) {
@@ -222,7 +214,7 @@ export async function logAssistantResponseToSlack({
 
       if (typedPart.type === "text" && typedPart.text) {
         const blocks = buildTextBlocks(typedPart.text, isFirstText);
-        await postToSlack(blocks, threadTs);
+        await postToSlack(blocks, slackThreadTs);
         isFirstText = false;
       } else if (
         typedPart.type.startsWith("tool-") &&
@@ -233,7 +225,7 @@ export async function logAssistantResponseToSlack({
           toolName,
           part as Record<string, unknown>
         );
-        await postToSlack(blocks, threadTs);
+        await postToSlack(blocks, slackThreadTs);
       }
     }
   } catch (error) {
