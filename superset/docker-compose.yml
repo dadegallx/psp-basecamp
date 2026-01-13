@@ -1,0 +1,131 @@
+# Superset Local Development Setup
+# Uses official Apache Superset image with custom configuration
+#
+# Usage:
+#   cd superset
+#   cp docker/.env.example docker/.env  # Edit with your secrets
+#   docker compose up -d
+#
+# Access at http://localhost (via nginx)
+# Default credentials: admin / admin
+
+x-superset-image: &superset-image apache/superset:latest-dev
+x-superset-user: &superset-user root
+x-superset-volumes: &superset-volumes
+  - ./docker/pythonpath:/app/pythonpath
+  - superset_home:/app/superset_home
+
+services:
+  nginx:
+    image: nginx:latest
+    container_name: superset_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/templates:/etc/nginx/templates:ro
+    environment:
+      - SUPERSET_APP_ROOT=/
+    depends_on:
+      - superset
+
+  redis:
+    image: redis:7
+    container_name: superset_cache
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis:/data
+
+  db:
+    image: postgres:16
+    container_name: superset_db
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - db_home:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: superset
+      POSTGRES_PASSWORD: superset
+      POSTGRES_DB: superset
+
+  superset:
+    image: *superset-image
+    container_name: superset_app
+    command: ["/app/docker/docker-bootstrap.sh", "app"]
+    restart: unless-stopped
+    ports:
+      - "8088:8088"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    user: *superset-user
+    depends_on:
+      superset-init:
+        condition: service_completed_successfully
+    volumes: *superset-volumes
+    env_file:
+      - ./docker/.env
+
+  superset-init:
+    image: *superset-image
+    container_name: superset_init
+    command: ["/app/docker/docker-init.sh"]
+    depends_on:
+      db:
+        condition: service_started
+      redis:
+        condition: service_started
+    user: *superset-user
+    volumes: *superset-volumes
+    env_file:
+      - ./docker/.env
+    environment:
+      - SUPERSET_LOAD_EXAMPLES=yes
+    healthcheck:
+      disable: true
+
+  superset-worker:
+    image: *superset-image
+    container_name: superset_worker
+    command: ["/app/docker/docker-bootstrap.sh", "worker"]
+    restart: unless-stopped
+    depends_on:
+      superset-init:
+        condition: service_completed_successfully
+    user: *superset-user
+    volumes: *superset-volumes
+    env_file:
+      - ./docker/.env
+    environment:
+      CELERYD_CONCURRENCY: 2
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A superset.tasks.celery_app:app inspect ping -d celery@$$HOSTNAME"]
+
+  superset-worker-beat:
+    image: *superset-image
+    container_name: superset_worker_beat
+    command: ["/app/docker/docker-bootstrap.sh", "beat"]
+    restart: unless-stopped
+    depends_on:
+      - superset-worker
+    user: *superset-user
+    volumes: *superset-volumes
+    env_file:
+      - ./docker/.env
+    healthcheck:
+      disable: true
+
+volumes:
+  superset_home:
+    external: false
+  db_home:
+    external: false
+  redis:
+    external: false

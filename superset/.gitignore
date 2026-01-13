@@ -1,0 +1,9 @@
+# Environment file with secrets
+docker/.env
+
+# Docker volumes (if mounted locally)
+volumes/
+
+# Python cache
+__pycache__/
+*.pyc

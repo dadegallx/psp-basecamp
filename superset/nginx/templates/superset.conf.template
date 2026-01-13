@@ -1,0 +1,50 @@
+# Superset Nginx Configuration with Chat Widget Injection
+# This template is processed by nginx envsubst on container startup
+
+upstream superset_app {
+    server superset:8088;
+    keepalive 100;
+}
+
+server {
+    listen 80 default_server;
+    server_name  _;
+
+    # Health check endpoint
+    location /health {
+        return 200 "OK";
+        add_header Content-Type text/plain;
+    }
+
+    # Main Superset application
+    location ${SUPERSET_APP_ROOT} {
+        proxy_pass http://superset_app;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_connect_timeout 300;
+        proxy_read_timeout 300;
+        proxy_send_timeout 300;
+
+        # Disable gzip from upstream so sub_filter can work
+        proxy_set_header Accept-Encoding "";
+
+        # =================================================================
+        # Chat Widget Injection
+        # Injects the widget.js script into every HTML response
+        # The chatbot runs on localhost:3000 during local development
+        # =================================================================
+        sub_filter '</body>' '<script src="http://localhost:3000/widget.js"></script></body>';
+        sub_filter_once on;
+        sub_filter_types text/html;
+
+        # =================================================================
+        # Content Security Policy
+        # Override Superset's CSP to allow the chat widget
+        # =================================================================
+        proxy_hide_header Content-Security-Policy;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:3000; frame-src 'self' http://localhost:3000; img-src 'self' blob: data: https://apachesuperset.gateway.scarf.sh https://static.scarf.sh; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.mapbox.com https://events.mapbox.com; worker-src 'self' blob:; object-src 'none';" always;
+    }
+}
