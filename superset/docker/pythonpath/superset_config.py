@@ -1,4 +1,4 @@
-# Poverty Stoplight - Superset Configuration
+# Poverty Stoplight - Superset Production Configuration
 # This file configures Superset when using the official Apache Superset image.
 # CSP/Talisman settings are handled by nginx, not here.
 
@@ -12,6 +12,7 @@ logger = logging.getLogger()
 
 # =============================================================================
 # Database Configuration (from environment)
+# Supports both local PostgreSQL and DO Managed PostgreSQL (SSL)
 # =============================================================================
 DATABASE_DIALECT = os.getenv("DATABASE_DIALECT", "postgresql")
 DATABASE_USER = os.getenv("DATABASE_USER", "superset")
@@ -20,14 +21,27 @@ DATABASE_HOST = os.getenv("DATABASE_HOST", "db")
 DATABASE_PORT = os.getenv("DATABASE_PORT", "5432")
 DATABASE_DB = os.getenv("DATABASE_DB", "superset")
 
-SQLALCHEMY_DATABASE_URI = (
-    f"{DATABASE_DIALECT}://"
-    f"{DATABASE_USER}:{DATABASE_PASSWORD}@"
-    f"{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_DB}"
-)
+# SSL mode for database connection (required for DO Managed PostgreSQL)
+# Options: disable, allow, prefer, require, verify-ca, verify-full
+DATABASE_SSL_MODE = os.getenv("DATABASE_SSL_MODE", "disable")
 
-# Examples database (same as main for local dev)
-SQLALCHEMY_EXAMPLES_URI = SQLALCHEMY_DATABASE_URI
+# Build connection URI with optional SSL
+if DATABASE_SSL_MODE and DATABASE_SSL_MODE != "disable":
+    SQLALCHEMY_DATABASE_URI = (
+        f"{DATABASE_DIALECT}://"
+        f"{DATABASE_USER}:{DATABASE_PASSWORD}@"
+        f"{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_DB}"
+        f"?sslmode={DATABASE_SSL_MODE}"
+    )
+else:
+    SQLALCHEMY_DATABASE_URI = (
+        f"{DATABASE_DIALECT}://"
+        f"{DATABASE_USER}:{DATABASE_PASSWORD}@"
+        f"{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_DB}"
+    )
+
+# Examples database (disabled in production, same as main for dev)
+SQLALCHEMY_EXAMPLES_URI = os.getenv("SQLALCHEMY_EXAMPLES_URI", SQLALCHEMY_DATABASE_URI)
 
 # =============================================================================
 # Secret Key (REQUIRED - generate with: openssl rand -base64 42)
@@ -98,8 +112,9 @@ SQLLAB_CTAS_NO_LIMIT = True
 # =============================================================================
 # Webdriver Configuration (for Alerts & Reports screenshots)
 # =============================================================================
-WEBDRIVER_BASEURL = "http://superset_app:8088/"
-WEBDRIVER_BASEURL_USER_FRIENDLY = "http://localhost/"
+DOMAIN_NAME = os.getenv("DOMAIN_NAME", "localhost")
+WEBDRIVER_BASEURL = f"http://superset:8088/"
+WEBDRIVER_BASEURL_USER_FRIENDLY = f"https://{DOMAIN_NAME}/"
 
 # =============================================================================
 # Poverty Stoplight Custom Color Scheme
@@ -129,12 +144,30 @@ LOG_LEVEL = getattr(logging, log_level_text.upper(), logging.INFO)
 
 # =============================================================================
 # Proxy Configuration
-# Enable if running behind nginx/load balancer
+# Enable when running behind nginx/load balancer
 # =============================================================================
 ENABLE_PROXY_FIX = True
+
+# Number of proxy servers in front of the app
+PROXY_FIX_CONFIG = {
+    "x_for": 1,
+    "x_proto": 1,
+    "x_host": 1,
+    "x_prefix": 1,
+}
+
+# =============================================================================
+# Production Settings
+# =============================================================================
+# Disable example loading in production
+SUPERSET_LOAD_EXAMPLES = os.getenv("SUPERSET_LOAD_EXAMPLES", "no") == "yes"
+
+# Row limit for SQL queries
+ROW_LIMIT = 50000
+SQL_MAX_ROW = ROW_LIMIT
 
 # =============================================================================
 # NOTE: CSP/Talisman configuration is handled by nginx, not here.
 # This allows the chat widget to be injected without modifying Superset code.
-# See nginx/templates/superset.conf.template for CSP headers.
+# See nginx/conf.d/superset.conf for CSP headers.
 # =============================================================================

@@ -1,201 +1,291 @@
-# Superset Local Development
+# Poverty Stoplight - Superset Deployment
 
-This directory contains configuration to run Apache Superset locally using the official Docker image, with the Poverty Stoplight chat widget automatically injected.
+This directory contains Docker configuration to run Apache Superset with the chat widget integration.
+
+- **Local Development**: `docker-compose.yml`
+- **Production**: `docker-compose.prod.yml`
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      localhost:80 (nginx)                    │
-│                                                              │
-│  ┌────────────────┐    ┌─────────────────────────────────┐  │
-│  │   sub_filter   │───>│  Injects widget.js into HTML    │  │
-│  └────────────────┘    └─────────────────────────────────┘  │
-│           │                                                  │
-│           ▼                                                  │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │              Superset (apache/superset:latest-dev)      │ │
-│  │                     localhost:8088                       │ │
-│  └────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              │ iframe
-                              ▼
-                ┌─────────────────────────────┐
-                │   Chatbot (localhost:3000)   │
-                │   (runs on host via pnpm)    │
-                └─────────────────────────────┘
+                    ┌──────────────────────────────────────────────┐
+                    │  Nginx (SSL + Widget Injection)              │
+   HTTPS :443 ────▶ │  - Let's Encrypt SSL via Certbot            │
+                    │  - Injects chat widget into HTML pages       │
+                    └──────────────────────────────────────────────┘
+                                         │
+                                         ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  Docker Compose Stack                                               │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐    │
+│  │ superset:8088   │  │ superset-worker │  │ superset-beat   │    │
+│  │ (gunicorn)      │  │ (celery)        │  │ (scheduler)     │    │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘    │
+│                              │                                      │
+│                       ┌──────┴──────┐                               │
+│                       │    Redis    │                               │
+│                       └─────────────┘                               │
+└─────────────────────────────────────────────────────────────────────┘
+                                         │
+                                         ▼
+                    ┌──────────────────────────────────────────────┐
+                    │  DigitalOcean Managed PostgreSQL             │
+                    │  (Existing database with users/dashboards)   │
+                    └──────────────────────────────────────────────┘
 ```
 
-## Prerequisites
+---
+
+## Local Development
+
+### Prerequisites
 
 - Docker and Docker Compose
 - Node.js 20+ and pnpm (for the chatbot)
 
-## Quick Start
-
-### 1. Start the Chatbot (in a terminal)
+### Quick Start
 
 ```bash
-# From the repository root (psp-basecamp/main)
-pnpm install
-pnpm dev
+# 1. Start the chatbot (from repo root)
+pnpm install && pnpm dev
 # Chatbot runs on http://localhost:3000
-```
 
-### 2. Start Superset (in another terminal)
-
-```bash
-# From this directory (psp-basecamp/main/superset)
+# 2. Start Superset (from this directory)
 cp docker/.env.example docker/.env
-# Edit docker/.env if needed (defaults work for local dev)
-
 docker compose up -d
+# Superset runs on http://localhost
 ```
 
-### 3. Access Superset
+**Default credentials:** admin / admin
 
-Open http://localhost in your browser.
-
-- **Default credentials:** admin / admin
-- The chat widget button appears in the bottom-right corner
-
-## First Run
-
-On first run, Superset will:
-1. Initialize the database
-2. Create the admin user
-3. Load example dashboards (if `SUPERSET_LOAD_EXAMPLES=yes`)
-
-This takes 2-3 minutes. Watch progress with:
-
-```bash
-docker compose logs -f superset-init
-```
-
-## Services
-
-| Service | Port | Description |
-|---------|------|-------------|
-| nginx | 80 | Reverse proxy with widget injection |
-| superset | 8088 | Main Superset application |
-| superset-worker | - | Celery worker for async tasks |
-| superset-worker-beat | - | Celery beat scheduler |
-| db | 5432 | PostgreSQL database |
-| redis | 6379 | Cache and message broker |
-
-## Configuration
-
-### Environment Variables
-
-Edit `docker/.env` to customize:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SECRET_KEY` | (change me) | Flask secret key |
-| `DATABASE_*` | postgres defaults | Database connection |
-| `REDIS_*` | redis defaults | Redis connection |
-| `SUPERSET_LOG_LEVEL` | INFO | Log verbosity |
-| `SUPERSET_LOAD_EXAMPLES` | yes | Load example dashboards |
-
-### Superset Config
-
-Python configuration is in `docker/pythonpath/superset_config.py`:
-
-- Custom color schemes (Poverty Stoplight colors)
-- Feature flags
-- Celery configuration
-- Caching settings
-
-### Nginx / Widget Injection
-
-The widget injection happens in `nginx/templates/superset.conf.template`:
-
-```nginx
-sub_filter '</body>' '<script src="http://localhost:3000/widget.js"></script></body>';
-```
-
-For production, update the widget URL to your deployed chatbot.
-
-## Common Commands
-
-```bash
-# Start all services
-docker compose up -d
-
-# View logs
-docker compose logs -f
-
-# View specific service logs
-docker compose logs -f superset
-
-# Stop all services
-docker compose down
-
-# Stop and remove volumes (full reset)
-docker compose down -v
-
-# Restart a specific service
-docker compose restart superset
-
-# Run Superset CLI commands
-docker compose exec superset superset --help
-
-# Access Superset shell
-docker compose exec superset superset shell
-```
-
-## Troubleshooting
-
-### Widget not appearing
-
-1. Ensure the chatbot is running on `localhost:3000`
-2. Check browser console for CSP errors
-3. Verify nginx is injecting the script: `curl -s http://localhost | grep widget.js`
-
-### Database connection issues
-
-```bash
-# Check if postgres is healthy
-docker compose exec db pg_isready
-
-# Reset database
-docker compose down -v
-docker compose up -d
-```
-
-### Superset initialization stuck
-
-```bash
-# Check init logs
-docker compose logs superset-init
-
-# Force restart init
-docker compose restart superset-init
-```
-
-## Updating Superset
-
-To update to a newer Superset version:
-
-1. Edit `docker-compose.yml` and change the image tag:
-   ```yaml
-   x-superset-image: &superset-image apache/superset:6.0.0
-   ```
-
-2. Recreate containers:
-   ```bash
-   docker compose down
-   docker compose pull
-   docker compose up -d
-   ```
+---
 
 ## Production Deployment
 
-This setup is for local development. For production:
+### 1. Provision a new DigitalOcean Droplet
 
-1. Use a managed database (e.g., Amazon RDS, DigitalOcean Managed DB)
-2. Use a managed Redis (e.g., Amazon ElastiCache)
-3. Update nginx CSP to allow your production chatbot domain
-4. Set a strong `SECRET_KEY`
-5. Configure proper SSL/TLS termination
+```bash
+doctl compute droplet create superset-new \
+  --region lon1 \
+  --size s-2vcpu-4gb \
+  --image ubuntu-24-04-x64 \
+  --ssh-keys <your-ssh-key-id>
+```
+
+### 2. Setup the droplet
+
+```bash
+# SSH into the droplet
+ssh root@<droplet-ip>
+
+# Install Docker
+curl -fsSL https://get.docker.com | sh
+
+# Clone the repository
+git clone https://github.com/your-org/psp-basecamp.git
+cd psp-basecamp/superset
+```
+
+### 3. Configure environment
+
+```bash
+# Copy and edit environment file
+cp docker/.env.example docker/.env
+nano docker/.env
+
+# Required values to change:
+# - SECRET_KEY (generate with: openssl rand -base64 42)
+# - DATABASE_PASSWORD (from DO dashboard)
+# - DATABASE_HOST (from DO dashboard)
+# - TLS_EMAIL (your email for Let's Encrypt)
+```
+
+### 4. Initialize SSL certificates
+
+```bash
+# Point DNS to this server first, then run:
+./scripts/init-letsencrypt.sh
+```
+
+### 5. Start the stack
+
+```bash
+docker compose -f docker-compose.prod.yml up -d
+```
+
+### 6. Verify deployment
+
+```bash
+# Check all containers are running
+docker compose -f docker-compose.prod.yml ps
+
+# Check logs
+docker compose -f docker-compose.prod.yml logs -f superset
+
+# Test health endpoint
+curl -k https://localhost/health
+```
+
+---
+
+## Files Overview
+
+| File | Description |
+|------|-------------|
+| `docker-compose.yml` | Local development configuration |
+| `docker-compose.prod.yml` | Production Docker Compose configuration |
+| `docker/.env.example` | Environment variables template |
+| `docker/pythonpath/superset_config.py` | Superset Python configuration |
+| `nginx/nginx.conf` | Main Nginx configuration |
+| `nginx/conf.d/superset.conf` | Nginx server block with SSL + widget injection |
+| `nginx/templates/superset.conf.template` | Local dev nginx template |
+| `scripts/init-letsencrypt.sh` | SSL certificate initialization script |
+
+---
+
+## Environment Variables
+
+### Required for Production
+
+| Variable | Description |
+|----------|-------------|
+| `SECRET_KEY` | Flask secret key (generate with `openssl rand -base64 42`) |
+| `DATABASE_PASSWORD` | PostgreSQL password |
+| `DATABASE_HOST` | PostgreSQL host |
+| `TLS_EMAIL` | Email for Let's Encrypt notifications |
+
+### Database Connection
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_DIALECT` | postgresql | Database type |
+| `DATABASE_USER` | doadmin | Database username |
+| `DATABASE_PORT` | 25060 | Database port |
+| `DATABASE_DB` | defaultdb | Database name |
+| `DATABASE_SSL_MODE` | require | SSL mode (require for DO Managed) |
+
+---
+
+## Migration from Old Deployment
+
+### Before Migration
+
+1. **Lower DNS TTL** in Cloudflare to 60 seconds (do this 24h before)
+
+### Migration Steps
+
+1. Deploy new droplet (steps above)
+2. Test via IP address: `http://<new-droplet-ip>`
+3. Verify login with existing credentials
+4. Verify dashboards load correctly
+5. Update Cloudflare A record to new IP
+6. Wait for propagation
+7. Test via domain
+8. Keep old droplet for 24-48h as rollback
+9. Destroy old droplet when confirmed stable
+
+### Rollback
+
+If issues occur:
+1. Revert Cloudflare A record to old droplet IP
+2. Old droplet remains running with same DB
+
+---
+
+## Chat Widget
+
+The chat widget is injected into all HTML pages via Nginx `sub_filter`:
+
+```nginx
+sub_filter '</body>' '<script src="https://chat.povertystoplight.vetta.so/widget.js"></script></body>';
+```
+
+The widget loads from Vercel and displays a floating chat button that opens the AI chatbot in an iframe.
+
+### Disabling Widget
+
+Comment out the `sub_filter` line in `nginx/conf.d/superset.conf` and reload:
+
+```bash
+docker compose -f docker-compose.prod.yml exec nginx nginx -s reload
+```
+
+---
+
+## Common Commands
+
+### Local Development
+
+```bash
+docker compose up -d              # Start
+docker compose down               # Stop
+docker compose down -v            # Stop and reset data
+docker compose logs -f superset   # View logs
+```
+
+### Production
+
+```bash
+docker compose -f docker-compose.prod.yml up -d        # Start
+docker compose -f docker-compose.prod.yml down         # Stop
+docker compose -f docker-compose.prod.yml logs -f      # All logs
+docker compose -f docker-compose.prod.yml restart      # Restart all
+```
+
+### Superset CLI
+
+```bash
+docker compose exec superset superset --help
+docker compose exec superset superset shell
+```
+
+---
+
+## Troubleshooting
+
+### Container won't start
+
+```bash
+docker compose -f docker-compose.prod.yml logs superset-init
+docker compose -f docker-compose.prod.yml logs superset
+```
+
+### Database connection failed
+
+```bash
+docker compose -f docker-compose.prod.yml exec superset \
+  python -c "from superset_config import SQLALCHEMY_DATABASE_URI; print(SQLALCHEMY_DATABASE_URI)"
+```
+
+### SSL certificate issues
+
+```bash
+# Check certbot logs
+docker compose -f docker-compose.prod.yml logs certbot
+
+# Manual renewal
+docker compose -f docker-compose.prod.yml run --rm certbot renew
+
+# Regenerate certificate (test first)
+STAGING=1 ./scripts/init-letsencrypt.sh
+./scripts/init-letsencrypt.sh
+```
+
+### Widget not appearing
+
+1. Check browser console for CSP errors
+2. Verify widget.js is accessible: `curl https://chat.povertystoplight.vetta.so/widget.js`
+3. Check Nginx sub_filter is working: `curl -s https://yoursite.com | grep widget.js`
+
+---
+
+## Updating Superset
+
+```bash
+# Edit docker/.env
+SUPERSET_VERSION=6.0.0
+
+# Pull and restart
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
+```

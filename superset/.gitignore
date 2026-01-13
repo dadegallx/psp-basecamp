@@ -4,6 +4,10 @@ docker/.env
 # Docker volumes (if mounted locally)
 volumes/
 
+# SSL certificates (managed by certbot)
+certbot/conf/
+certbot/www/
+
 # Python cache
 __pycache__/
 *.pyc
