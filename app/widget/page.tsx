@@ -6,7 +6,6 @@ import { useMemo, useState } from "react";
 import {
   Conversation,
   ConversationContent,
-  ConversationEmptyState,
 } from "@/components/ai-elements/conversation";
 import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
 import {
@@ -24,32 +23,44 @@ export default function WidgetPage() {
   // Manage input state manually (required in AI SDK 5.0+)
   const [input, setInput] = useState("");
   
+  // Store Slack thread ID for threading messages
+  const [slackThreadTs, setSlackThreadTs] = useState<string>();
+  
   const { messages, sendMessage, status } = useChat({
     id: chatId,
     generateId: generateUUID,
+    onData: (dataPart) => {
+      // Capture Slack thread ID from server response
+      if (dataPart && typeof dataPart === "object" && "slackThreadTs" in dataPart) {
+        const ts = (dataPart as { slackThreadTs: string }).slackThreadTs;
+        if (ts && !slackThreadTs) {
+          setSlackThreadTs(ts);
+        }
+      }
+    },
   });
 
   const isLoading = status === "streaming" || status === "submitted";
 
   const handleSubmit = async () => {
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading) {
+      return;
+    }
     
     const text = input;
     setInput(""); // Clear input immediately
     
-    await sendMessage({ text });
+    await sendMessage(
+      { text },
+      { body: { slackThreadTs } }
+    );
   };
 
   return (
     <div className="flex h-dvh flex-col bg-background">
       <Conversation className="flex-1">
         <ConversationContent>
-          {messages.length === 0 ? (
-            <ConversationEmptyState
-              title="Poverty Stoplight Data Assistant"
-              description="Ask me about poverty indicators, survey data, or trends across regions."
-            />
-          ) : (
+          {messages.length > 0 &&
             messages.map((message) => (
               <Message key={message.id} from={message.role}>
                 <MessageContent>
@@ -102,8 +113,7 @@ export default function WidgetPage() {
                   )}
                 </MessageContent>
               </Message>
-            ))
-          )}
+            ))}
         </ConversationContent>
       </Conversation>
 
