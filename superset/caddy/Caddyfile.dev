@@ -13,12 +13,17 @@
 	reverse_proxy superset:8088 {
 		# Disable compression from upstream so replace works
 		header_up Accept-Encoding identity
+		# Remove CSP header from Superset so we can inject our own
+		header_down -Content-Security-Policy
 	}
 
+	# Set our own CSP that allows the widget
+	header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:3000; frame-src 'self' http://localhost:3000; img-src 'self' blob: data: https://apachesuperset.gateway.scarf.sh https://static.scarf.sh; style-src 'self' 'unsafe-inline'; connect-src 'self'; worker-src 'self' blob:; object-src 'none';"
+
 	# Inject chat widget into HTML responses
-	# Widget loads from host machine running pnpm dev
+	# Widget loads from localhost:3000 (chatbot dev server on host)
 	replace {
-		</body> "<script src=\"http://host.docker.internal:3000/widget.js\"></script></body>"
+		</body> "<script src=\"http://localhost:3000/widget.js\"></script></body>"
 	}
 
 	# Health check endpoint

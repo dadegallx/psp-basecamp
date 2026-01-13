@@ -11,7 +11,12 @@
 	reverse_proxy superset:8088 {
 		# Disable compression from upstream so replace works
 		header_up Accept-Encoding identity
+		# Remove CSP header from Superset so we can inject our own
+		header_down -Content-Security-Policy
 	}
+
+	# Set our own CSP that allows the widget
+	header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://chat.povertystoplight.vetta.so; frame-src 'self' https://chat.povertystoplight.vetta.so; img-src 'self' blob: data: https://apachesuperset.gateway.scarf.sh https://static.scarf.sh; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.mapbox.com https://events.mapbox.com; worker-src 'self' blob:; object-src 'none';"
 
 	# Inject chat widget into HTML responses
 	replace {
