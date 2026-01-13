@@ -187,7 +187,19 @@
     }
   }
 
-  // Initialize the widget
-  init();
+  // Check if user is on login/auth pages (not logged in)
+  function isAuthPage() {
+    var path = window.location.pathname;
+    return path.indexOf('/login') === 0 || 
+           path.indexOf('/register') === 0 ||
+           path.indexOf('/logout') === 0 ||
+           path.indexOf('/reset') === 0;
+  }
+
+  // Initialize the widget only on non-auth pages
+  // Superset redirects unauthenticated users to /login/ automatically
+  if (!isAuthPage()) {
+    init();
+  }
 
 })();
