@@ -52,9 +52,10 @@ export const executeQuery = tool({
     }
 
     try {
-      // Execute the query using neon's tagged template function
-      // For dynamic queries, we call sql as a function
-      const results = await sql.query(query);
+      // Execute the query using neon's query method for dynamic queries
+      // sql.query() accepts a query string with optional placeholders
+      // Since we're not using placeholders, pass empty array
+      const results = await sql.query(query, []);
       const rowCount = Array.isArray(results) ? results.length : 0;
 
       return {
