@@ -1,0 +1,34 @@
+# Superset Development Caddyfile
+# No SSL, just proxy + widget injection
+
+{
+	# Disable automatic HTTPS for local dev
+	auto_https off
+	# Disable admin API
+	admin off
+}
+
+:80 {
+	# Reverse proxy to Superset
+	reverse_proxy superset:8088 {
+		# Disable compression from upstream so replace works
+		header_up Accept-Encoding identity
+	}
+
+	# Inject chat widget into HTML responses
+	# Widget loads from host machine running pnpm dev
+	replace {
+		</body> "<script src=\"http://host.docker.internal:3000/widget.js\"></script></body>"
+	}
+
+	# Health check endpoint
+	handle /health {
+		respond "OK" 200
+	}
+
+	# Logging
+	log {
+		output stdout
+		format console
+	}
+}

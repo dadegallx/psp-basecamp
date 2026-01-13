@@ -1,12 +1,12 @@
 # Superset Local Development Setup
-# Uses official Apache Superset image with custom configuration
+# Uses official Apache Superset image with Caddy for widget injection
 #
 # Usage:
 #   cd superset
 #   cp docker/.env.example docker/.env  # Edit with your secrets
 #   docker compose up -d
 #
-# Access at http://localhost (via nginx)
+# Access at http://localhost (via Caddy)
 # Default credentials: admin / admin
 
 x-superset-image: &superset-image apache/superset:latest-dev
@@ -16,22 +16,25 @@ x-superset-volumes: &superset-volumes
   - superset_home:/app/superset_home
 
 services:
-  nginx:
-    image: nginx:latest
-    container_name: superset_nginx
+  # ==========================================================================
+  # Caddy - Reverse proxy + widget injection (no SSL in dev)
+  # ==========================================================================
+  caddy:
+    build: ./caddy
+    container_name: superset_caddy
     restart: unless-stopped
     ports:
       - "80:80"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/templates:/etc/nginx/templates:ro
-    environment:
-      - SUPERSET_APP_ROOT=/
+      - ./caddy/Caddyfile.dev:/etc/caddy/Caddyfile:ro
     depends_on:
       - superset
 
+  # ==========================================================================
+  # Redis - Cache and Celery broker
+  # ==========================================================================
   redis:
     image: redis:7
     container_name: superset_cache
@@ -41,6 +44,9 @@ services:
     volumes:
       - redis:/data
 
+  # ==========================================================================
+  # PostgreSQL - Local database for development
+  # ==========================================================================
   db:
     image: postgres:16
     container_name: superset_db
@@ -54,6 +60,9 @@ services:
       POSTGRES_PASSWORD: superset
       POSTGRES_DB: superset
 
+  # ==========================================================================
+  # Superset App - Main web application
+  # ==========================================================================
   superset:
     image: *superset-image
     container_name: superset_app
@@ -71,6 +80,9 @@ services:
     env_file:
       - ./docker/.env
 
+  # ==========================================================================
+  # Superset Init - Database initialization (runs once)
+  # ==========================================================================
   superset-init:
     image: *superset-image
     container_name: superset_init
@@ -89,6 +101,9 @@ services:
     healthcheck:
       disable: true
 
+  # ==========================================================================
+  # Superset Worker - Celery background tasks
+  # ==========================================================================
   superset-worker:
     image: *superset-image
     container_name: superset_worker
@@ -108,6 +123,9 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "celery -A superset.tasks.celery_app:app inspect ping -d celery@$$HOSTNAME"]
 
+  # ==========================================================================
+  # Superset Beat - Celery scheduler
+  # ==========================================================================
   superset-worker-beat:
     image: *superset-image
     container_name: superset_worker_beat
@@ -124,8 +142,5 @@ services:
 
 volumes:
   superset_home:
-    external: false
   db_home:
-    external: false
   redis:
-    external: false

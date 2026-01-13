@@ -1,16 +1,15 @@
 # Superset Production Setup
-# Uses official Apache Superset image with nginx + certbot SSL
+# Uses official Apache Superset image with Caddy for SSL + widget injection
 #
 # Prerequisites:
 #   1. Copy docker/.env.example to docker/.env and configure
-#   2. Run ./scripts/init-letsencrypt.sh to obtain SSL certificates
+#   2. Ensure DNS points to this server
 #   3. docker compose -f docker-compose.prod.yml up -d
 #
 # Architecture:
-#   - Nginx handles SSL termination + widget injection
+#   - Caddy handles SSL (auto Let's Encrypt) + widget injection
 #   - Superset connects to DO Managed PostgreSQL (external)
 #   - Redis runs locally for caching/celery
-#   - Certbot handles certificate renewal
 
 x-superset-image: &superset-image apache/superset:${SUPERSET_VERSION:-latest}
 x-superset-env: &superset-env
@@ -19,37 +18,25 @@ x-superset-env: &superset-env
 
 services:
   # ==========================================================================
-  # Nginx - SSL termination + widget injection
+  # Caddy - Auto SSL + widget injection
   # ==========================================================================
-  nginx:
-    image: nginx:1.27
-    container_name: superset_nginx
+  caddy:
+    build: ./caddy
+    container_name: superset_caddy
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./certbot/conf:/etc/letsencrypt:ro
-      - ./certbot/www:/var/www/certbot:ro
+      - ./caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      - DOMAIN_NAME=${DOMAIN_NAME:-localhost}
+      - TLS_EMAIL=${TLS_EMAIL:-}
     depends_on:
-      - superset
-    # Reload nginx when certificates are renewed
-    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
-
-  # ==========================================================================
-  # Certbot - SSL certificate management
-  # ==========================================================================
-  certbot:
-    image: certbot/certbot
-    container_name: superset_certbot
-    restart: unless-stopped
-    volumes:
-      - ./certbot/conf:/etc/letsencrypt
-      - ./certbot/www:/var/www/certbot
-    # Renew certificates every 12 hours
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+      superset:
+        condition: service_healthy
 
   # ==========================================================================
   # Redis - Local cache and Celery broker
@@ -158,3 +145,5 @@ services:
 volumes:
   redis_data:
   superset_home:
+  caddy_data:
+  caddy_config:

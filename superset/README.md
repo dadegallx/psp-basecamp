@@ -9,8 +9,8 @@ This directory contains Docker configuration to run Apache Superset with the cha
 
 ```
                     ┌──────────────────────────────────────────────┐
-                    │  Nginx (SSL + Widget Injection)              │
-   HTTPS :443 ────▶ │  - Let's Encrypt SSL via Certbot            │
+                    │  Caddy (Auto SSL + Widget Injection)         │
+   HTTPS :443 ────▶ │  - Automatic Let's Encrypt SSL              │
                     │  - Injects chat widget into HTML pages       │
                     └──────────────────────────────────────────────┘
                                          │
@@ -97,23 +97,20 @@ nano docker/.env
 # - SECRET_KEY (generate with: openssl rand -base64 42)
 # - DATABASE_PASSWORD (from DO dashboard)
 # - DATABASE_HOST (from DO dashboard)
+# - DOMAIN_NAME (your domain)
 # - TLS_EMAIL (your email for Let's Encrypt)
 ```
 
-### 4. Initialize SSL certificates
+### 4. Start the stack
 
 ```bash
-# Point DNS to this server first, then run:
-./scripts/init-letsencrypt.sh
-```
-
-### 5. Start the stack
-
-```bash
+# Point DNS to this server first, then:
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-### 6. Verify deployment
+Caddy will automatically obtain SSL certificates from Let's Encrypt.
+
+### 5. Verify deployment
 
 ```bash
 # Check all containers are running
@@ -123,7 +120,7 @@ docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml logs -f superset
 
 # Test health endpoint
-curl -k https://localhost/health
+curl https://yourdomain.com/health
 ```
 
 ---
@@ -136,10 +133,9 @@ curl -k https://localhost/health
 | `docker-compose.prod.yml` | Production Docker Compose configuration |
 | `docker/.env.example` | Environment variables template |
 | `docker/pythonpath/superset_config.py` | Superset Python configuration |
-| `nginx/nginx.conf` | Main Nginx configuration |
-| `nginx/conf.d/superset.conf` | Nginx server block with SSL + widget injection |
-| `nginx/templates/superset.conf.template` | Local dev nginx template |
-| `scripts/init-letsencrypt.sh` | SSL certificate initialization script |
+| `caddy/Dockerfile` | Custom Caddy with replace-response plugin |
+| `caddy/Caddyfile.dev` | Caddy config for local dev (no SSL) |
+| `caddy/Caddyfile.prod` | Caddy config for production (auto SSL) |
 
 ---
 
@@ -152,6 +148,7 @@ curl -k https://localhost/health
 | `SECRET_KEY` | Flask secret key (generate with `openssl rand -base64 42`) |
 | `DATABASE_PASSWORD` | PostgreSQL password |
 | `DATABASE_HOST` | PostgreSQL host |
+| `DOMAIN_NAME` | Your domain (e.g., `povertystoplight.vetta.so`) |
 | `TLS_EMAIL` | Email for Let's Encrypt notifications |
 
 ### Database Connection
@@ -175,12 +172,12 @@ curl -k https://localhost/health
 ### Migration Steps
 
 1. Deploy new droplet (steps above)
-2. Test via IP address: `http://<new-droplet-ip>`
-3. Verify login with existing credentials
-4. Verify dashboards load correctly
-5. Update Cloudflare A record to new IP
-6. Wait for propagation
-7. Test via domain
+2. Test via IP address (Caddy will show certificate warning - that's OK)
+3. Point DNS to new droplet IP
+4. Wait for propagation (~5 min with low TTL)
+5. Verify SSL certificate is issued: `docker compose -f docker-compose.prod.yml logs caddy`
+6. Verify login with existing credentials
+7. Verify dashboards load correctly
 8. Keep old droplet for 24-48h as rollback
 9. Destroy old droplet when confirmed stable
 
@@ -194,20 +191,22 @@ If issues occur:
 
 ## Chat Widget
 
-The chat widget is injected into all HTML pages via Nginx `sub_filter`:
+The chat widget is injected into all HTML pages via Caddy's `replace` directive:
 
-```nginx
-sub_filter '</body>' '<script src="https://chat.povertystoplight.vetta.so/widget.js"></script></body>';
+```caddyfile
+replace {
+    </body> "<script src=\"https://chat.povertystoplight.vetta.so/widget.js\"></script></body>"
+}
 ```
 
 The widget loads from Vercel and displays a floating chat button that opens the AI chatbot in an iframe.
 
 ### Disabling Widget
 
-Comment out the `sub_filter` line in `nginx/conf.d/superset.conf` and reload:
+Comment out the `replace` block in `caddy/Caddyfile.prod` and restart:
 
 ```bash
-docker compose -f docker-compose.prod.yml exec nginx nginx -s reload
+docker compose -f docker-compose.prod.yml restart caddy
 ```
 
 ---
@@ -221,6 +220,7 @@ docker compose up -d              # Start
 docker compose down               # Stop
 docker compose down -v            # Stop and reset data
 docker compose logs -f superset   # View logs
+docker compose logs -f caddy      # View Caddy logs
 ```
 
 ### Production
@@ -260,22 +260,18 @@ docker compose -f docker-compose.prod.yml exec superset \
 ### SSL certificate issues
 
 ```bash
-# Check certbot logs
-docker compose -f docker-compose.prod.yml logs certbot
+# Check Caddy logs for certificate status
+docker compose -f docker-compose.prod.yml logs caddy
 
-# Manual renewal
-docker compose -f docker-compose.prod.yml run --rm certbot renew
-
-# Regenerate certificate (test first)
-STAGING=1 ./scripts/init-letsencrypt.sh
-./scripts/init-letsencrypt.sh
+# Caddy automatically retries certificate issuance
+# Ensure DNS is pointing to the server and ports 80/443 are open
 ```
 
 ### Widget not appearing
 
 1. Check browser console for CSP errors
 2. Verify widget.js is accessible: `curl https://chat.povertystoplight.vetta.so/widget.js`
-3. Check Nginx sub_filter is working: `curl -s https://yoursite.com | grep widget.js`
+3. Check Caddy replace is working: `curl -s https://yoursite.com | grep widget.js`
 
 ---
 
@@ -285,7 +281,16 @@ STAGING=1 ./scripts/init-letsencrypt.sh
 # Edit docker/.env
 SUPERSET_VERSION=6.0.0
 
-# Pull and restart
-docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml up -d
+# Rebuild and restart
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+---
+
+## Building Custom Caddy Image
+
+The Caddy image includes the `replace-response` plugin for widget injection. To rebuild:
+
+```bash
+docker compose -f docker-compose.prod.yml build caddy
 ```

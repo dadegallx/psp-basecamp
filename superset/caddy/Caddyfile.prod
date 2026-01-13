@@ -1,0 +1,31 @@
+# Superset Production Caddyfile
+# Auto SSL via Let's Encrypt + Widget Injection
+
+{
+	# Email for Let's Encrypt notifications
+	email {$TLS_EMAIL}
+}
+
+{$DOMAIN_NAME} {
+	# Reverse proxy to Superset
+	reverse_proxy superset:8088 {
+		# Disable compression from upstream so replace works
+		header_up Accept-Encoding identity
+	}
+
+	# Inject chat widget into HTML responses
+	replace {
+		</body> "<script src=\"https://chat.povertystoplight.vetta.so/widget.js\"></script></body>"
+	}
+
+	# Health check endpoint
+	handle /health {
+		respond "OK" 200
+	}
+
+	# Logging
+	log {
+		output stdout
+		format console
+	}
+}
